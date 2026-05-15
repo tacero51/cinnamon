@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>シナモンのスイーツ日記</title>
+  <meta name="description" content="食べたスイーツを記録するふわふわ日記">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- ふわふわ雲の背景装飾 -->
+  <div class="clouds" aria-hidden="true">
+    <svg class="cloud cloud-1" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
+      <path d="M40 60 Q20 60 20 45 Q20 30 40 30 Q40 15 60 15 Q80 5 100 20 Q130 10 140 30 Q170 30 170 50 Q170 65 145 65 Z" fill="white"/>
+    </svg>
+    <svg class="cloud cloud-2" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
+      <path d="M40 60 Q20 60 20 45 Q20 30 40 30 Q40 15 60 15 Q80 5 100 20 Q130 10 140 30 Q170 30 170 50 Q170 65 145 65 Z" fill="white"/>
+    </svg>
+    <svg class="cloud cloud-3" viewBox="0 0 200 80" xmlns="http://www.w3.org/2000/svg">
+      <path d="M40 60 Q20 60 20 45 Q20 30 40 30 Q40 15 60 15 Q80 5 100 20 Q130 10 140 30 Q170 30 170 50 Q170 65 145 65 Z" fill="white"/>
+    </svg>
+  </div>
+
+  <header class="site-header">
+    <div class="header-decoration">
+      <span class="star">✦</span>
+      <span class="star star-small">✧</span>
+      <span class="star">✦</span>
+    </div>
+    <h1 class="site-title">シナモンの<br>スイーツ日記</h1>
+    <p class="site-subtitle">食べたスイーツのきろく ☁️</p>
+  </header>
+
+  <main class="entries-section">
+    <div id="entries" class="entries-grid">
+      <!-- JS で挿入される -->
+    </div>
+    <div id="empty-state" class="empty-state" hidden>
+      <p>まだスイーツがないよ。<br>クロードに「スイーツ食べたよ」って話してみてね！</p>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <p>made with ☁️ by シナモン</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
