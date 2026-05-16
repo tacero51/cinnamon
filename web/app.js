@@ -67,7 +67,6 @@
         ${photo}
         <div class="entry-actions">
           <button class="action-btn action-edit" data-action="edit" data-id="${id}" aria-label="なおす" title="なおす">✏️</button>
-          <button class="action-btn action-delete" data-action="delete" data-id="${id}" aria-label="けす" title="けす">🗑️</button>
         </div>
         <h2 class="entry-name">${name}</h2>
         <div class="entry-meta">
@@ -116,6 +115,9 @@
 
   let editingId = null;
 
+  const deleteZone = document.getElementById('delete-zone');
+  const deleteBtn = document.getElementById('delete-btn');
+
   function showPostView(entry = null) {
     editingId = entry?.id || null;
 
@@ -127,12 +129,14 @@
       form.querySelector('textarea[name="comment"]').value = entry.comment || '';
       setRating(Number(entry.rating) || 0);
       showExistingPhoto(entry.photo);
+      deleteZone.hidden = false;
     } else {
       formTitleEl.textContent = 'あたらしい スイーツ';
       submitBtn.textContent = 'とうこうする';
       form.reset();
       setRating(0);
       hideExistingPhoto();
+      deleteZone.hidden = true;
     }
 
     homeView.hidden = true;
@@ -211,6 +215,49 @@
     }
   });
 
+  // ===== 写真選択ボタン =====
+
+  const photoInput = document.getElementById('photo-input');
+  const photoPickBtn = document.getElementById('photo-pick-btn');
+  const photoPreview = document.getElementById('photo-preview');
+  const photoPreviewImg = document.getElementById('photo-preview-img');
+  const photoClearBtn = document.getElementById('photo-clear-btn');
+
+  photoPickBtn.addEventListener('click', () => photoInput.click());
+
+  photoInput.addEventListener('change', () => {
+    const file = photoInput.files[0];
+    if (!file) {
+      photoPreview.hidden = true;
+      photoPreviewImg.src = '';
+      photoPickBtn.textContent = '📷 しゃしんを えらぶ';
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      photoPreviewImg.src = e.target.result;
+      photoPreview.hidden = false;
+      photoPickBtn.textContent = '📷 しゃしんを かえる';
+    };
+    reader.readAsDataURL(file);
+  });
+
+  photoClearBtn.addEventListener('click', () => {
+    photoInput.value = '';
+    photoPreview.hidden = true;
+    photoPreviewImg.src = '';
+    photoPickBtn.textContent = '📷 しゃしんを えらぶ';
+  });
+
+  // フォームリセット時にプレビューもクリア
+  form.addEventListener('reset', () => {
+    setTimeout(() => {
+      photoPreview.hidden = true;
+      photoPreviewImg.src = '';
+      photoPickBtn.textContent = '📷 しゃしんを えらぶ';
+    }, 0);
+  });
+
   // ===== 評価選択 =====
 
   const ratingInput = form.querySelector('input[name="rating"]');
@@ -231,7 +278,7 @@
 
   // ===== 一覧上のアクション（編集・削除） =====
 
-  entriesEl.addEventListener('click', async (e) => {
+  entriesEl.addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const id = btn.dataset.id;
@@ -241,21 +288,33 @@
       const entry = cachedEntries.find((x) => x.id === id);
       if (!entry) return;
       showPostView(entry);
-    } else if (action === 'delete') {
-      const entry = cachedEntries.find((x) => x.id === id);
-      const name = entry ? entry.name : 'これ';
-      if (!confirm(`「${name}」を ほんとうに けしていい？`)) return;
-      btn.disabled = true;
-      try {
-        const res = await fetch(`/api/entries/${encodeURIComponent(id)}`, { method: 'DELETE' });
-        const json = await res.json().catch(() => ({}));
-        if (!res.ok || !json.ok) throw new Error(json.error || `エラー: ${res.status}`);
-        await refresh();
-      } catch (err) {
-        alert('けせなかった: ' + err.message);
-      } finally {
-        btn.disabled = false;
-      }
+    }
+  });
+
+  // 編集画面からの削除
+  deleteBtn.addEventListener('click', async () => {
+    if (!editingId) return;
+    const entry = cachedEntries.find((x) => x.id === editingId);
+    const name = entry ? entry.name : 'これ';
+    if (!confirm(`「${name}」を ほんとうに けしていい？`)) return;
+
+    deleteBtn.disabled = true;
+    submitBtn.disabled = true;
+    try {
+      const res = await fetch(`/api/entries/${encodeURIComponent(editingId)}`, { method: 'DELETE' });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error(json.error || `エラー: ${res.status}`);
+      await refresh();
+      // 削除後はホームに戻る
+      if (history.state && history.state.view === 'post') history.back();
+      else showHomeView();
+    } catch (err) {
+      messageEl.textContent = 'けせなかった: ' + err.message;
+      messageEl.className = 'form-message error';
+      messageEl.hidden = false;
+    } finally {
+      deleteBtn.disabled = false;
+      submitBtn.disabled = false;
     }
   });
 

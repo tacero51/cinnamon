@@ -248,6 +248,103 @@ body {
   cursor: pointer;
 }
 
+/* 写真選択ボタン */
+.photo-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.btn-photo-pick {
+  background: var(--cream);
+  color: var(--text-main);
+  border: 2px dashed var(--sky-mid);
+  border-radius: 16px;
+  padding: 1rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+
+.btn-photo-pick:hover, .btn-photo-pick:focus {
+  background: var(--sky-light);
+  border-color: var(--sky-deep);
+  transform: translateY(-2px);
+}
+
+.btn-photo-pick:active {
+  transform: translateY(0);
+}
+
+.photo-preview {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+}
+
+.photo-preview img {
+  max-width: 100%;
+  max-height: 240px;
+  border-radius: 16px;
+  display: block;
+  box-shadow: 0 4px 12px var(--shadow-cloud);
+}
+
+.btn-photo-clear {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-soft);
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+
+.btn-photo-clear:hover, .btn-photo-clear:focus {
+  transform: scale(1.1);
+}
+
+/* 編集画面の削除ゾーン */
+.delete-zone {
+  margin-top: 2.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px dashed #E0E0E0;
+  text-align: center;
+}
+
+.btn-delete {
+  background: transparent;
+  color: #C62828;
+  border: 2px solid #FFCDD2;
+  border-radius: 16px;
+  padding: 0.7rem 1.2rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+
+.btn-delete:hover, .btn-delete:focus {
+  background: #FFEBEE;
+  transform: translateY(-2px);
+}
+
+.btn-delete:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 .entry-emoji {
   font-size: 2.5rem;
   margin-bottom: 0.5rem;

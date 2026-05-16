@@ -69,11 +69,20 @@
 
     <main class="post-main">
       <form id="entry-form" autocomplete="off">
-        <label class="field">
+        <div class="field">
           <span class="field-label">しゃしん（あるなら）</span>
-          <input type="file" name="photo" accept="image/*">
+          <div class="photo-picker">
+            <input type="file" id="photo-input" name="photo" accept="image/*" hidden>
+            <button type="button" id="photo-pick-btn" class="btn-photo-pick">
+              📷 しゃしんを えらぶ
+            </button>
+            <div id="photo-preview" class="photo-preview" hidden>
+              <img id="photo-preview-img" alt="えらんだ しゃしん">
+              <button type="button" id="photo-clear-btn" class="btn-photo-clear" aria-label="しゃしんを やめる">×</button>
+            </div>
+          </div>
           <small class="field-hint">じぶんや おともだちが うつってる しゃしんは のせないでね</small>
-        </label>
+        </div>
 
         <label class="field">
           <span class="field-label">スイーツの なまえ <em>*</em></span>
@@ -109,6 +118,13 @@
         </div>
 
         <div id="form-message" class="form-message" hidden></div>
+
+        <!-- 削除ボタン（編集モードでだけ表示） -->
+        <div id="delete-zone" class="delete-zone" hidden>
+          <button type="button" id="delete-btn" class="btn-delete">
+            🗑️ このスイーツを けす
+          </button>
+        </div>
       </form>
     </main>
   </div>
