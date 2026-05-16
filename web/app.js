@@ -193,6 +193,21 @@
     }
   });
 
+  // ===== リフレッシュボタン =====
+
+  const refreshBtn = document.getElementById('refresh-btn');
+  if (refreshBtn) {
+    refreshBtn.addEventListener('click', async () => {
+      refreshBtn.classList.add('spinning');
+      refreshBtn.disabled = true;
+      await refresh();
+      setTimeout(() => {
+        refreshBtn.classList.remove('spinning');
+        refreshBtn.disabled = false;
+      }, 800);
+    });
+  }
+
   // ===== 起動 =====
 
   refresh();
