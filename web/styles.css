@@ -1,8 +1,8 @@
 /* ===== シナモン世界観テーマ ===== */
 :root {
-  --sky-light: #E6F4F9;
-  --sky-mid: #B8E0F0;
-  --sky-deep: #7FC3E0;
+  --sky-light: #E6F8FC;
+  --sky-mid: #9FD9EE;
+  --sky-deep: #5BB8DC;
   --white: #FFFFFF;
   --cream: #FFF9F2;
   --pink-blush: #FFD3D8;
@@ -27,7 +27,7 @@ body {
   font-family: 'M PLUS Rounded 1c', sans-serif;
   font-weight: 500;
   color: var(--text-main);
-  background: linear-gradient(180deg, var(--sky-light) 0%, var(--sky-mid) 100%);
+  background: linear-gradient(180deg, var(--sky-light) 0%, var(--sky-mid) 55%, var(--sky-deep) 100%);
   background-attachment: fixed;
   min-height: 100vh;
   overflow-x: hidden;
