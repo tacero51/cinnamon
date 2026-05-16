@@ -1,8 +1,8 @@
 /* ===== シナモン世界観テーマ ===== */
 :root {
-  --sky-light: #E6F8FC;
-  --sky-mid: #9FD9EE;
-  --sky-deep: #5BB8DC;
+  --sky-light: #B3E5F2;
+  --sky-mid: #6BC4E3;
+  --sky-deep: #2B8FBF;
   --white: #FFFFFF;
   --cream: #FFF9F2;
   --pink-blush: #FFD3D8;
@@ -342,6 +342,22 @@ body {
 
 .fab:active {
   transform: scale(0.96);
+}
+
+/* さいしんにする ボタン（＋ボタンの左側に配置） */
+.fab-refresh {
+  right: calc(1.5rem + 64px + 1rem);
+  font-size: 1.6rem;
+}
+
+.fab-refresh.spinning span {
+  display: inline-block;
+  animation: refresh-spin 0.8s ease-in-out;
+}
+
+@keyframes refresh-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 /* ===== モーダル ===== */
