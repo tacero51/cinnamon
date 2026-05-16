@@ -32,7 +32,7 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   position: relative;
-  padding-bottom: 2rem;
+  padding-bottom: 6rem;
 }
 
 /* ===== 雲の背景アニメーション ===== */
@@ -173,6 +173,18 @@ body {
   z-index: 0;
 }
 
+.entry-photo {
+  display: block;
+  width: calc(100% + 3rem);
+  margin: -1.5rem -1.5rem 1rem;
+  height: 220px;
+  object-fit: cover;
+  border-top-left-radius: 32px;
+  border-top-right-radius: 32px;
+  position: relative;
+  z-index: 1;
+}
+
 .entry-emoji {
   font-size: 2.5rem;
   margin-bottom: 0.5rem;
@@ -277,7 +289,7 @@ body {
   }
 }
 
-/* ===== 縦に並んだときの「ふわっ」アニメ ===== */
+/* ===== カードアニメ ===== */
 .entry-card {
   animation: card-appear 0.5s ease-out backwards;
 }
@@ -299,4 +311,265 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ===== 投稿ボタン (FAB) ===== */
+.fab {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 10;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--white);
+  color: var(--sky-deep);
+  border: none;
+  font-size: 2rem;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 24px var(--shadow-cloud), 0 2px 8px rgba(127, 195, 224, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.fab:hover, .fab:focus {
+  transform: scale(1.08);
+  box-shadow: 0 12px 32px var(--shadow-cloud), 0 4px 12px rgba(127, 195, 224, 0.3);
+}
+
+.fab:active {
+  transform: scale(0.96);
+}
+
+/* ===== モーダル ===== */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modal[hidden] {
+  display: none;
+}
+
+.modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(74, 85, 104, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+.modal-panel {
+  position: relative;
+  background: var(--white);
+  border-radius: 32px;
+  padding: 2rem 1.5rem 1.5rem;
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(127, 195, 224, 0.4);
+  animation: modal-pop 0.3s ease-out;
+}
+
+@keyframes modal-pop {
+  0% { opacity: 0; transform: scale(0.95) translateY(20px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-close {
+  position: absolute;
+  top: 0.8rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  font-size: 1.8rem;
+  color: var(--text-soft);
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s ease;
+}
+
+.modal-close:hover {
+  background: var(--sky-light);
+}
+
+#form-title {
+  font-size: 1.4rem;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: var(--text-main);
+}
+
+/* ===== フォーム ===== */
+#entry-form .field {
+  display: block;
+  margin-bottom: 1.2rem;
+}
+
+.field-label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+  color: var(--text-main);
+}
+
+.field-label em {
+  color: var(--pink-deep);
+  font-style: normal;
+}
+
+#entry-form input[type="text"],
+#entry-form textarea {
+  width: 100%;
+  padding: 0.8rem 1rem;
+  border: 2px solid var(--sky-light);
+  border-radius: 16px;
+  font: inherit;
+  color: var(--text-main);
+  background: var(--cream);
+  transition: border-color 0.2s ease;
+}
+
+#entry-form input[type="text"]:focus,
+#entry-form textarea:focus {
+  outline: none;
+  border-color: var(--sky-deep);
+}
+
+#entry-form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+#entry-form input[type="file"] {
+  width: 100%;
+  padding: 0.6rem;
+  font: inherit;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.emoji-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.emoji-btn {
+  background: var(--cream);
+  border: 2px solid transparent;
+  border-radius: 12px;
+  font-size: 1.5rem;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, transform 0.15s ease;
+}
+
+.emoji-btn:hover {
+  transform: scale(1.1);
+}
+
+.emoji-btn.active {
+  border-color: var(--pink-deep);
+  background: var(--pink-blush);
+}
+
+.rating-row {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.star-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: #E0E0E0;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.star-btn:hover {
+  transform: scale(1.15);
+}
+
+.star-btn.active {
+  color: var(--star-yellow);
+}
+
+/* ===== フォームアクション ===== */
+.form-actions {
+  display: flex;
+  gap: 0.8rem;
+  margin-top: 1.5rem;
+}
+
+.btn-cancel, .btn-submit {
+  flex: 1;
+  padding: 0.9rem 1rem;
+  border-radius: 16px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-cancel {
+  background: var(--sky-light);
+  color: var(--text-main);
+}
+
+.btn-submit {
+  background: var(--sky-deep);
+  color: var(--white);
+  box-shadow: 0 4px 12px var(--shadow-cloud);
+}
+
+.btn-submit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px var(--shadow-cloud);
+}
+
+.btn-submit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.form-message {
+  margin-top: 1rem;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.form-message.success {
+  background: #E8F5E9;
+  color: #2E7D32;
+}
+
+.form-message.error {
+  background: #FFEBEE;
+  color: #C62828;
 }

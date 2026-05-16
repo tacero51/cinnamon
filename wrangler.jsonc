@@ -2,8 +2,16 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "cinnamon",
   "compatibility_date": "2026-05-15",
+  "main": "src/worker.js",
   "assets": {
     "directory": "./web",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
-  }
+  },
+  "r2_buckets": [
+    {
+      "binding": "PHOTOS",
+      "bucket_name": "cinnamon-photos"
+    }
+  ]
 }

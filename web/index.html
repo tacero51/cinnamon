@@ -39,9 +39,83 @@
       <!-- JS で挿入される -->
     </div>
     <div id="empty-state" class="empty-state" hidden>
-      <p>まだスイーツがないよ。<br>クロードに「スイーツ食べたよ」って話してみてね！</p>
+      <p>まだスイーツがないよ。<br>「＋」ボタンから ついかしてね！</p>
     </div>
   </main>
+
+  <!-- 投稿ボタン（FAB） -->
+  <button id="open-form" class="fab" aria-label="スイーツを追加">
+    <span>＋</span>
+  </button>
+
+  <!-- 投稿フォーム（モーダル） -->
+  <div id="form-modal" class="modal" hidden>
+    <div class="modal-backdrop" data-close="true"></div>
+    <div class="modal-panel" role="dialog" aria-labelledby="form-title">
+      <button class="modal-close" aria-label="閉じる" data-close="true">×</button>
+      <h2 id="form-title">あたらしい スイーツを ついか🍰</h2>
+
+      <form id="entry-form" autocomplete="off">
+        <label class="field">
+          <span class="field-label">スイーツの なまえ <em>*</em></span>
+          <input type="text" name="name" maxlength="50" required placeholder="例: ショートケーキ">
+        </label>
+
+        <label class="field">
+          <span class="field-label">えもじ（すきな おかしの えもじ）</span>
+          <div class="emoji-row" role="radiogroup" aria-label="絵文字">
+            <button type="button" class="emoji-btn" data-emoji="🍰">🍰</button>
+            <button type="button" class="emoji-btn" data-emoji="🍫">🍫</button>
+            <button type="button" class="emoji-btn" data-emoji="🍪">🍪</button>
+            <button type="button" class="emoji-btn" data-emoji="🍩">🍩</button>
+            <button type="button" class="emoji-btn" data-emoji="🍡">🍡</button>
+            <button type="button" class="emoji-btn" data-emoji="🍦">🍦</button>
+            <button type="button" class="emoji-btn" data-emoji="🍮">🍮</button>
+            <button type="button" class="emoji-btn" data-emoji="🧁">🧁</button>
+            <button type="button" class="emoji-btn" data-emoji="🍓">🍓</button>
+            <button type="button" class="emoji-btn" data-emoji="🍭">🍭</button>
+          </div>
+          <input type="hidden" name="emoji" value="🍰">
+        </label>
+
+        <label class="field">
+          <span class="field-label">どこで たべた？</span>
+          <input type="text" name="where" maxlength="50" placeholder="おうち / カフェ / こうえん など">
+          <small class="field-hint">学校・お店の名前など、ばしょがわかるものはひかえてね</small>
+        </label>
+
+        <label class="field">
+          <span class="field-label">かんそう</span>
+          <textarea name="comment" maxlength="300" rows="3" placeholder="どんな味だった？"></textarea>
+        </label>
+
+        <label class="field">
+          <span class="field-label">おほし★</span>
+          <div class="rating-row" role="radiogroup" aria-label="評価">
+            <button type="button" class="star-btn" data-value="1">★</button>
+            <button type="button" class="star-btn" data-value="2">★</button>
+            <button type="button" class="star-btn" data-value="3">★</button>
+            <button type="button" class="star-btn" data-value="4">★</button>
+            <button type="button" class="star-btn" data-value="5">★</button>
+          </div>
+          <input type="hidden" name="rating" value="0">
+        </label>
+
+        <label class="field">
+          <span class="field-label">しゃしん（あるなら）</span>
+          <input type="file" name="photo" accept="image/*" capture="environment">
+          <small class="field-hint">じぶんや おともだちが うつってる しゃしんは のせないでね</small>
+        </label>
+
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" data-close="true">やめる</button>
+          <button type="submit" class="btn-submit">とうこうする</button>
+        </div>
+
+        <div id="form-message" class="form-message" hidden></div>
+      </form>
+    </div>
+  </div>
 
   <footer class="site-footer">
     <p>made with ☁️ by ミッフィー</p>

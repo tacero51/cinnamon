@@ -1,0 +1,198 @@
+// シナモン/ミッフィー スイーツ日記 - Cloudflare Worker
+// 静的アセットを配信しつつ、/api/* と /photos/* を動的に処理する
+
+const ENTRIES_KEY = 'data/entries.json';
+const MAX_PHOTO_BYTES = 10 * 1024 * 1024; // 10MB
+const ALLOWED_PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/heic'];
+
+const DEFAULT_ENTRIES = {
+  entries: [
+    {
+      id: 'sample-1',
+      date: '2026-05-15',
+      emoji: '🍰',
+      name: 'ショートケーキ',
+      where: 'おうち',
+      rating: 5,
+      comment: 'いちごがあまくて、クリームがふわふわでとっても美味しかった！',
+    },
+    {
+      id: 'sample-2',
+      date: '2026-05-12',
+      emoji: '🍫',
+      name: 'チョコレートマフィン',
+      where: 'カフェ',
+      rating: 4,
+      comment: '中にチョコチップがたくさん入ってて嬉しかった。',
+    },
+    {
+      id: 'sample-3',
+      date: '2026-05-08',
+      emoji: '🍡',
+      name: 'みたらしだんご',
+      where: 'おばあちゃんち',
+      rating: 5,
+      comment: 'あまじょっぱくて、もちもちでさいこう！',
+    },
+  ],
+};
+
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+
+    // API routes
+    if (url.pathname === '/api/entries') {
+      if (request.method === 'GET') return getEntries(env);
+      if (request.method === 'POST') return postEntry(request, env);
+      return methodNotAllowed();
+    }
+
+    // Photo serving
+    if (url.pathname.startsWith('/photos/')) {
+      const key = url.pathname.slice(1); // remove leading /
+      return servePhoto(env, key);
+    }
+
+    // Static assets (HTML/CSS/JS)
+    return env.ASSETS.fetch(request);
+  },
+};
+
+// ===== Entries =====
+
+async function getEntries(env) {
+  const data = await readEntries(env);
+  return json(data);
+}
+
+async function postEntry(request, env) {
+  const contentType = request.headers.get('content-type') || '';
+  if (!contentType.includes('multipart/form-data')) {
+    return error(400, 'Content-Type must be multipart/form-data');
+  }
+
+  let form;
+  try {
+    form = await request.formData();
+  } catch (e) {
+    return error(400, 'invalid form data');
+  }
+
+  const name = (form.get('name') || '').toString().trim();
+  if (!name) return error(400, 'name is required');
+  if (name.length > 50) return error(400, 'name too long (max 50)');
+
+  const comment = (form.get('comment') || '').toString().trim();
+  if (comment.length > 300) return error(400, 'comment too long (max 300)');
+
+  const where = (form.get('where') || '').toString().trim();
+  if (where.length > 50) return error(400, 'where too long (max 50)');
+
+  const ratingRaw = (form.get('rating') || '0').toString();
+  const rating = Math.max(0, Math.min(5, parseInt(ratingRaw, 10) || 0));
+
+  const emoji = (form.get('emoji') || '🍰').toString().slice(0, 4);
+
+  // Photo (optional)
+  let photoUrl = null;
+  const photo = form.get('photo');
+  if (photo && typeof photo !== 'string' && photo.size > 0) {
+    if (photo.size > MAX_PHOTO_BYTES) {
+      return error(413, `photo too large (max ${MAX_PHOTO_BYTES} bytes)`);
+    }
+    if (!ALLOWED_PHOTO_TYPES.includes(photo.type)) {
+      return error(415, `photo type not allowed: ${photo.type}`);
+    }
+    const ext = photoExtension(photo.type);
+    const key = `photos/${Date.now()}-${randomId(6)}.${ext}`;
+    await env.PHOTOS.put(key, photo.stream(), {
+      httpMetadata: { contentType: photo.type },
+    });
+    photoUrl = `/${key}`;
+  }
+
+  const entry = {
+    id: `${Date.now()}-${randomId(4)}`,
+    date: new Date().toISOString().slice(0, 10),
+    emoji,
+    name,
+    where: where || undefined,
+    rating: rating || undefined,
+    comment: comment || undefined,
+    photo: photoUrl || undefined,
+    created_at: new Date().toISOString(),
+  };
+
+  // Read-modify-write entries.json (concurrent writes are rare for this scale)
+  const data = await readEntries(env);
+  data.entries.unshift(entry); // 最新を先頭に
+  await env.PHOTOS.put(ENTRIES_KEY, JSON.stringify(data, null, 2), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  return json({ ok: true, entry });
+}
+
+async function readEntries(env) {
+  const obj = await env.PHOTOS.get(ENTRIES_KEY);
+  if (!obj) {
+    // 初回: デフォルトを書き込んで返す
+    await env.PHOTOS.put(ENTRIES_KEY, JSON.stringify(DEFAULT_ENTRIES, null, 2), {
+      httpMetadata: { contentType: 'application/json' },
+    });
+    return DEFAULT_ENTRIES;
+  }
+  try {
+    return JSON.parse(await obj.text());
+  } catch (e) {
+    return DEFAULT_ENTRIES;
+  }
+}
+
+// ===== Photo serving =====
+
+async function servePhoto(env, key) {
+  const obj = await env.PHOTOS.get(key);
+  if (!obj) return new Response('not found', { status: 404 });
+  const headers = new Headers();
+  obj.writeHttpMetadata(headers);
+  headers.set('etag', obj.httpEtag);
+  headers.set('cache-control', 'public, max-age=31536000, immutable');
+  return new Response(obj.body, { headers });
+}
+
+// ===== Helpers =====
+
+function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'content-type': 'application/json; charset=utf-8' },
+  });
+}
+
+function error(status, message) {
+  return json({ ok: false, error: message }, status);
+}
+
+function methodNotAllowed() {
+  return new Response('method not allowed', { status: 405 });
+}
+
+function randomId(len) {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let s = '';
+  for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+function photoExtension(mime) {
+  switch (mime) {
+    case 'image/jpeg': return 'jpg';
+    case 'image/png': return 'png';
+    case 'image/gif': return 'gif';
+    case 'image/webp': return 'webp';
+    case 'image/heic': return 'heic';
+    default: return 'bin';
+  }
+}
