@@ -88,7 +88,6 @@ async function postEntry(request, env) {
   }
 
   const name = (form.get('name') || '').toString().trim();
-  if (!name) return error(400, 'name is required');
   if (name.length > 50) return error(400, 'name too long (max 50)');
 
   const comment = (form.get('comment') || '').toString().trim();
@@ -161,7 +160,6 @@ async function putEntry(request, env, id) {
   }
 
   const name = (form.get('name') || '').toString().trim();
-  if (!name) return error(400, 'name is required');
   if (name.length > 50) return error(400, 'name too long (max 50)');
 
   const comment = (form.get('comment') || '').toString().trim();

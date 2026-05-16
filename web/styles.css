@@ -361,6 +361,12 @@ body {
   z-index: 1;
 }
 
+.entry-name-empty {
+  color: var(--text-soft);
+  font-style: italic;
+  font-weight: 500;
+}
+
 .entry-meta {
   display: flex;
   gap: 0.8rem;

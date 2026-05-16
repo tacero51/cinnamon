@@ -50,7 +50,11 @@
   }
 
   function renderEntry(entry) {
-    const name = escapeHTML(entry.name);
+    const nameRaw = (entry.name || '').trim();
+    const name = escapeHTML(nameRaw);
+    const nameHtml = nameRaw
+      ? `<h2 class="entry-name">${name}</h2>`
+      : `<h2 class="entry-name entry-name-empty">スイーツ</h2>`;
     const date = escapeHTML(formatDate(entry.date));
     const where = entry.where ? `<span class="entry-where">${escapeHTML(entry.where)}</span>` : '';
     const rating = renderStars(entry.rating);
@@ -58,7 +62,7 @@
       ? `<p class="entry-comment">${escapeHTML(entry.comment)}</p>`
       : '';
     const photo = entry.photo
-      ? `<img class="entry-photo" src="${escapeHTML(entry.photo)}" alt="${name}" loading="lazy">`
+      ? `<img class="entry-photo" src="${escapeHTML(entry.photo)}" alt="${name || 'スイーツ'}" loading="lazy">`
       : '';
     const id = escapeHTML(entry.id);
 
@@ -68,7 +72,7 @@
         <div class="entry-actions">
           <button class="action-btn action-edit" data-action="edit" data-id="${id}" aria-label="なおす" title="なおす">✏️</button>
         </div>
-        <h2 class="entry-name">${name}</h2>
+        ${nameHtml}
         <div class="entry-meta">
           ${date ? `<span class="entry-date">${date}</span>` : ''}
           ${where}
@@ -305,9 +309,9 @@
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.ok) throw new Error(json.error || `エラー: ${res.status}`);
       await refresh();
-      // 削除後はホームに戻る
-      if (history.state && history.state.view === 'post') history.back();
-      else showHomeView();
+      // 削除後はホームへ確実に戻る
+      history.replaceState({}, '', window.location.pathname);
+      showHomeView();
     } catch (err) {
       messageEl.textContent = 'けせなかった: ' + err.message;
       messageEl.className = 'form-message error';
@@ -344,10 +348,10 @@
 
       await refresh();
       setTimeout(() => {
-        // 投稿成功後はホームに戻る
-        if (history.state && history.state.view === 'post') history.back();
-        else showHomeView();
-      }, 900);
+        // 投稿成功後はホームへ確実に戻る（URLの#postも消す）
+        history.replaceState({}, '', window.location.pathname);
+        showHomeView();
+      }, 600);
     } catch (e) {
       messageEl.textContent = '失敗しちゃった: ' + e.message;
       messageEl.className = 'form-message error';
