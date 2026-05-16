@@ -1,12 +1,14 @@
-// ミッフィーのスイーツ日記 — エントリ表示 + 投稿フォーム
+// ミッフィーのスイーツ日記 — エントリ表示 + 投稿/編集
 (function () {
   'use strict';
 
   const ENTRIES_URL = '/api/entries';
   const entriesEl = document.getElementById('entries');
   const emptyEl = document.getElementById('empty-state');
+  const homeView = document.getElementById('home-view');
+  const postView = document.getElementById('post-view');
 
-  let cachedEntries = []; // 編集時にcurrent値を取得するため
+  let cachedEntries = [];
 
   // ===== エントリ表示 =====
 
@@ -48,7 +50,6 @@
   }
 
   function renderEntry(entry) {
-    const emoji = entry.emoji || '🍰';
     const name = escapeHTML(entry.name);
     const date = escapeHTML(formatDate(entry.date));
     const where = entry.where ? `<span class="entry-where">${escapeHTML(entry.where)}</span>` : '';
@@ -68,7 +69,6 @@
           <button class="action-btn action-edit" data-action="edit" data-id="${id}" aria-label="なおす" title="なおす">✏️</button>
           <button class="action-btn action-delete" data-action="delete" data-id="${id}" aria-label="けす" title="けす">🗑️</button>
         </div>
-        <div class="entry-emoji">${emoji}</div>
         <h2 class="entry-name">${name}</h2>
         <div class="entry-meta">
           ${date ? `<span class="entry-date">${date}</span>` : ''}
@@ -104,64 +104,74 @@
     render(entries);
   }
 
-  // ===== モーダル制御 =====
+  // ===== 画面遷移制御 =====
 
-  const modal = document.getElementById('form-modal');
   const openBtn = document.getElementById('open-form');
+  const backBtn = document.getElementById('back-btn');
   const form = document.getElementById('entry-form');
   const messageEl = document.getElementById('form-message');
   const formTitleEl = document.getElementById('form-title');
   const submitBtn = form.querySelector('.btn-submit');
+  const existingPhotoContainerId = 'existing-photo';
 
-  let editingId = null; // null=新規、文字列=編集中のID
+  let editingId = null;
 
-  function openModal(entry = null) {
+  function showPostView(entry = null) {
     editingId = entry?.id || null;
 
     if (entry) {
-      // 編集モード
       formTitleEl.textContent = 'スイーツを なおす ✏️';
       submitBtn.textContent = 'なおす';
       form.querySelector('input[name="name"]').value = entry.name || '';
       form.querySelector('input[name="where"]').value = entry.where || '';
       form.querySelector('textarea[name="comment"]').value = entry.comment || '';
-      setEmoji(entry.emoji || '🍰');
       setRating(Number(entry.rating) || 0);
       showExistingPhoto(entry.photo);
     } else {
-      // 新規モード
-      formTitleEl.textContent = 'あたらしい スイーツを ついか🍰';
+      formTitleEl.textContent = 'あたらしい スイーツ';
       submitBtn.textContent = 'とうこうする';
       form.reset();
-      setEmoji('🍰');
       setRating(0);
       hideExistingPhoto();
     }
 
-    modal.hidden = false;
-    document.body.style.overflow = 'hidden';
+    homeView.hidden = true;
+    postView.hidden = false;
+    window.scrollTo(0, 0);
+    // ブラウザ履歴に追加（戻るボタン対応）
+    history.pushState({ view: 'post' }, '', '#post');
   }
 
-  function closeModal() {
-    modal.hidden = true;
-    document.body.style.overflow = '';
+  function showHomeView() {
+    editingId = null;
     form.reset();
-    setEmoji('🍰');
     setRating(0);
     messageEl.hidden = true;
     messageEl.className = 'form-message';
-    editingId = null;
     hideExistingPhoto();
+
+    postView.hidden = true;
+    homeView.hidden = false;
   }
 
+  function goBack() {
+    // pushStateしたstateを戻すために history.back を使う
+    if (history.state && history.state.view === 'post') {
+      history.back();
+    } else {
+      showHomeView();
+    }
+  }
+
+  // 既存写真のプレビュー（編集時）
   function showExistingPhoto(photoUrl) {
-    let el = document.getElementById('existing-photo');
+    let el = document.getElementById(existingPhotoContainerId);
     if (!el) {
       const photoField = form.querySelector('input[name="photo"]').closest('.field');
       el = document.createElement('div');
-      el.id = 'existing-photo';
+      el.id = existingPhotoContainerId;
       el.className = 'existing-photo';
-      photoField.insertBefore(el, photoField.firstChild.nextSibling);
+      photoField.appendChild(el);
     }
     if (photoUrl) {
       el.innerHTML = `
@@ -179,14 +189,44 @@
   }
 
   function hideExistingPhoto() {
-    const el = document.getElementById('existing-photo');
+    const el = document.getElementById(existingPhotoContainerId);
     if (el) { el.hidden = true; el.innerHTML = ''; }
   }
 
-  openBtn.addEventListener('click', () => openModal(null));
+  // 投稿ボタン
+  openBtn.addEventListener('click', () => showPostView(null));
 
-  modal.addEventListener('click', (e) => {
-    if (e.target.dataset.close === 'true') closeModal();
+  // 戻るボタン（ヘッダー）
+  backBtn.addEventListener('click', goBack);
+
+  // やめるボタン
+  form.addEventListener('click', (e) => {
+    if (e.target.dataset.action === 'back') goBack();
+  });
+
+  // ブラウザ「戻る」対応
+  window.addEventListener('popstate', () => {
+    if (!postView.hidden) {
+      showHomeView();
+    }
+  });
+
+  // ===== 評価選択 =====
+
+  const ratingInput = form.querySelector('input[name="rating"]');
+
+  function setRating(value) {
+    ratingInput.value = String(value);
+    form.querySelectorAll('.star-btn').forEach((btn) => {
+      btn.classList.toggle('active', Number(btn.dataset.value) <= value);
+    });
+  }
+
+  form.querySelectorAll('.star-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const v = Number(btn.dataset.value);
+      setRating(ratingInput.value === String(v) ? 0 : v);
+    });
   });
 
   // ===== 一覧上のアクション（編集・削除） =====
@@ -200,7 +240,7 @@
     if (action === 'edit') {
       const entry = cachedEntries.find((x) => x.id === id);
       if (!entry) return;
-      openModal(entry);
+      showPostView(entry);
     } else if (action === 'delete') {
       const entry = cachedEntries.find((x) => x.id === id);
       const name = entry ? entry.name : 'これ';
@@ -219,42 +259,7 @@
     }
   });
 
-  // ===== 絵文字選択 =====
-
-  const emojiInput = form.querySelector('input[name="emoji"]');
-
-  function setEmoji(emoji) {
-    emojiInput.value = emoji;
-    form.querySelectorAll('.emoji-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.emoji === emoji);
-    });
-  }
-  setEmoji('🍰');
-
-  form.querySelectorAll('.emoji-btn').forEach((btn) => {
-    btn.addEventListener('click', () => setEmoji(btn.dataset.emoji));
-  });
-
-  // ===== 評価選択 =====
-
-  const ratingInput = form.querySelector('input[name="rating"]');
-
-  function setRating(value) {
-    ratingInput.value = String(value);
-    form.querySelectorAll('.star-btn').forEach((btn) => {
-      btn.classList.toggle('active', Number(btn.dataset.value) <= value);
-    });
-  }
-
-  form.querySelectorAll('.star-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const v = Number(btn.dataset.value);
-      // 同じスターをタップしたら解除
-      setRating(ratingInput.value === String(v) ? 0 : v);
-    });
-  });
-
-  // ===== 送信（新規・編集の両方） =====
+  // ===== 送信 =====
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -278,9 +283,12 @@
       messageEl.className = 'form-message success';
       messageEl.hidden = false;
 
-      // 一覧更新 + フォーム閉じる
       await refresh();
-      setTimeout(closeModal, 900);
+      setTimeout(() => {
+        // 投稿成功後はホームに戻る
+        if (history.state && history.state.view === 'post') history.back();
+        else showHomeView();
+      }, 900);
     } catch (e) {
       messageEl.textContent = '失敗しちゃった: ' + e.message;
       messageEl.className = 'form-message error';
