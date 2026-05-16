@@ -62,6 +62,12 @@
 
       <form id="entry-form" autocomplete="off">
         <label class="field">
+          <span class="field-label">しゃしん（あるなら）</span>
+          <input type="file" name="photo" accept="image/*">
+          <small class="field-hint">じぶんや おともだちが うつってる しゃしんは のせないでね</small>
+        </label>
+
+        <label class="field">
           <span class="field-label">スイーツの なまえ <em>*</em></span>
           <input type="text" name="name" maxlength="50" required placeholder="例: ショートケーキ">
         </label>
@@ -90,11 +96,6 @@
         </label>
 
         <label class="field">
-          <span class="field-label">かんそう</span>
-          <textarea name="comment" maxlength="300" rows="3" placeholder="どんな味だった？"></textarea>
-        </label>
-
-        <label class="field">
           <span class="field-label">おほし★</span>
           <div class="rating-row" role="radiogroup" aria-label="評価">
             <button type="button" class="star-btn" data-value="1">★</button>
@@ -107,9 +108,8 @@
         </label>
 
         <label class="field">
-          <span class="field-label">しゃしん（あるなら）</span>
-          <input type="file" name="photo" accept="image/*">
-          <small class="field-hint">じぶんや おともだちが うつってる しゃしんは のせないでね</small>
+          <span class="field-label">かんそう</span>
+          <textarea name="comment" maxlength="300" rows="3" placeholder="どんな味だった？"></textarea>
         </label>
 
         <div class="form-actions">
