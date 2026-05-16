@@ -48,6 +48,14 @@ export default {
       return methodNotAllowed();
     }
 
+    if (url.pathname.startsWith('/api/entries/')) {
+      const id = decodeURIComponent(url.pathname.slice('/api/entries/'.length));
+      if (!id) return error(400, 'entry id required');
+      if (request.method === 'PUT') return putEntry(request, env, id);
+      if (request.method === 'DELETE') return deleteEntry(env, id);
+      return methodNotAllowed();
+    }
+
     // Photo serving
     if (url.pathname.startsWith('/photos/')) {
       const key = url.pathname.slice(1); // remove leading /
@@ -132,6 +140,101 @@ async function postEntry(request, env) {
   });
 
   return json({ ok: true, entry });
+}
+
+async function putEntry(request, env, id) {
+  const contentType = request.headers.get('content-type') || '';
+  if (!contentType.includes('multipart/form-data')) {
+    return error(400, 'Content-Type must be multipart/form-data');
+  }
+
+  const data = await readEntries(env);
+  const idx = data.entries.findIndex((e) => e.id === id);
+  if (idx < 0) return error(404, 'entry not found');
+  const existing = data.entries[idx];
+
+  let form;
+  try {
+    form = await request.formData();
+  } catch (e) {
+    return error(400, 'invalid form data');
+  }
+
+  const name = (form.get('name') || '').toString().trim();
+  if (!name) return error(400, 'name is required');
+  if (name.length > 50) return error(400, 'name too long (max 50)');
+
+  const comment = (form.get('comment') || '').toString().trim();
+  if (comment.length > 300) return error(400, 'comment too long (max 300)');
+
+  const where = (form.get('where') || '').toString().trim();
+  if (where.length > 50) return error(400, 'where too long (max 50)');
+
+  const ratingRaw = (form.get('rating') || '0').toString();
+  const rating = Math.max(0, Math.min(5, parseInt(ratingRaw, 10) || 0));
+
+  const emoji = (form.get('emoji') || '🍰').toString().slice(0, 4);
+
+  // Photo handling
+  let photoUrl = existing.photo;
+  const photo = form.get('photo');
+  const removePhoto = form.get('remove_photo') === '1';
+
+  if (photo && typeof photo !== 'string' && photo.size > 0) {
+    if (photo.size > MAX_PHOTO_BYTES) return error(413, `photo too large (max ${MAX_PHOTO_BYTES} bytes)`);
+    if (!ALLOWED_PHOTO_TYPES.includes(photo.type)) return error(415, `photo type not allowed: ${photo.type}`);
+    // delete old photo
+    if (existing.photo && existing.photo.startsWith('/photos/')) {
+      try { await env.PHOTOS.delete(existing.photo.slice(1)); } catch {}
+    }
+    const ext = photoExtension(photo.type);
+    const key = `photos/${Date.now()}-${randomId(6)}.${ext}`;
+    await env.PHOTOS.put(key, photo.stream(), {
+      httpMetadata: { contentType: photo.type },
+    });
+    photoUrl = `/${key}`;
+  } else if (removePhoto) {
+    if (existing.photo && existing.photo.startsWith('/photos/')) {
+      try { await env.PHOTOS.delete(existing.photo.slice(1)); } catch {}
+    }
+    photoUrl = undefined;
+  }
+
+  data.entries[idx] = {
+    ...existing,
+    name,
+    emoji,
+    where: where || undefined,
+    rating: rating || undefined,
+    comment: comment || undefined,
+    photo: photoUrl || undefined,
+    updated_at: new Date().toISOString(),
+  };
+
+  await env.PHOTOS.put(ENTRIES_KEY, JSON.stringify(data, null, 2), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  return json({ ok: true, entry: data.entries[idx] });
+}
+
+async function deleteEntry(env, id) {
+  const data = await readEntries(env);
+  const idx = data.entries.findIndex((e) => e.id === id);
+  if (idx < 0) return error(404, 'entry not found');
+  const entry = data.entries[idx];
+
+  // delete associated photo
+  if (entry.photo && entry.photo.startsWith('/photos/')) {
+    try { await env.PHOTOS.delete(entry.photo.slice(1)); } catch {}
+  }
+
+  data.entries.splice(idx, 1);
+  await env.PHOTOS.put(ENTRIES_KEY, JSON.stringify(data, null, 2), {
+    httpMetadata: { contentType: 'application/json' },
+  });
+
+  return json({ ok: true });
 }
 
 async function readEntries(env) {

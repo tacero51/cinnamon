@@ -6,6 +6,8 @@
   const entriesEl = document.getElementById('entries');
   const emptyEl = document.getElementById('empty-state');
 
+  let cachedEntries = []; // 編集時にcurrent値を取得するため
+
   // ===== エントリ表示 =====
 
   async function loadEntries() {
@@ -57,10 +59,15 @@
     const photo = entry.photo
       ? `<img class="entry-photo" src="${escapeHTML(entry.photo)}" alt="${name}" loading="lazy">`
       : '';
+    const id = escapeHTML(entry.id);
 
     return `
-      <article class="entry-card">
+      <article class="entry-card" data-id="${id}">
         ${photo}
+        <div class="entry-actions">
+          <button class="action-btn action-edit" data-action="edit" data-id="${id}" aria-label="なおす" title="なおす">✏️</button>
+          <button class="action-btn action-delete" data-action="delete" data-id="${id}" aria-label="けす" title="けす">🗑️</button>
+        </div>
         <div class="entry-emoji">${emoji}</div>
         <h2 class="entry-name">${name}</h2>
         <div class="entry-meta">
@@ -74,6 +81,7 @@
   }
 
   function render(entries) {
+    cachedEntries = entries;
     if (!entries.length) {
       entriesEl.hidden = true;
       emptyEl.hidden = false;
@@ -102,8 +110,34 @@
   const openBtn = document.getElementById('open-form');
   const form = document.getElementById('entry-form');
   const messageEl = document.getElementById('form-message');
+  const formTitleEl = document.getElementById('form-title');
+  const submitBtn = form.querySelector('.btn-submit');
 
-  function openModal() {
+  let editingId = null; // null=新規、文字列=編集中のID
+
+  function openModal(entry = null) {
+    editingId = entry?.id || null;
+
+    if (entry) {
+      // 編集モード
+      formTitleEl.textContent = 'スイーツを なおす ✏️';
+      submitBtn.textContent = 'なおす';
+      form.querySelector('input[name="name"]').value = entry.name || '';
+      form.querySelector('input[name="where"]').value = entry.where || '';
+      form.querySelector('textarea[name="comment"]').value = entry.comment || '';
+      setEmoji(entry.emoji || '🍰');
+      setRating(Number(entry.rating) || 0);
+      showExistingPhoto(entry.photo);
+    } else {
+      // 新規モード
+      formTitleEl.textContent = 'あたらしい スイーツを ついか🍰';
+      submitBtn.textContent = 'とうこうする';
+      form.reset();
+      setEmoji('🍰');
+      setRating(0);
+      hideExistingPhoto();
+    }
+
     modal.hidden = false;
     document.body.style.overflow = 'hidden';
   }
@@ -116,12 +150,73 @@
     setRating(0);
     messageEl.hidden = true;
     messageEl.className = 'form-message';
+    editingId = null;
+    hideExistingPhoto();
   }
 
-  openBtn.addEventListener('click', openModal);
+  function showExistingPhoto(photoUrl) {
+    let el = document.getElementById('existing-photo');
+    if (!el) {
+      const photoField = form.querySelector('input[name="photo"]').closest('.field');
+      el = document.createElement('div');
+      el.id = 'existing-photo';
+      el.className = 'existing-photo';
+      photoField.insertBefore(el, photoField.firstChild.nextSibling);
+    }
+    if (photoUrl) {
+      el.innerHTML = `
+        <img src="${escapeHTML(photoUrl)}" alt="いまの しゃしん">
+        <label class="remove-photo-label">
+          <input type="checkbox" name="remove_photo" value="1">
+          <span>この しゃしんを けす</span>
+        </label>
+      `;
+      el.hidden = false;
+    } else {
+      el.hidden = true;
+      el.innerHTML = '';
+    }
+  }
+
+  function hideExistingPhoto() {
+    const el = document.getElementById('existing-photo');
+    if (el) { el.hidden = true; el.innerHTML = ''; }
+  }
+
+  openBtn.addEventListener('click', () => openModal(null));
 
   modal.addEventListener('click', (e) => {
     if (e.target.dataset.close === 'true') closeModal();
+  });
+
+  // ===== 一覧上のアクション（編集・削除） =====
+
+  entriesEl.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const id = btn.dataset.id;
+    const action = btn.dataset.action;
+
+    if (action === 'edit') {
+      const entry = cachedEntries.find((x) => x.id === id);
+      if (!entry) return;
+      openModal(entry);
+    } else if (action === 'delete') {
+      const entry = cachedEntries.find((x) => x.id === id);
+      const name = entry ? entry.name : 'これ';
+      if (!confirm(`「${name}」を ほんとうに けしていい？`)) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/entries/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.ok) throw new Error(json.error || `エラー: ${res.status}`);
+        await refresh();
+      } catch (err) {
+        alert('けせなかった: ' + err.message);
+      } finally {
+        btn.disabled = false;
+      }
+    }
   });
 
   // ===== 絵文字選択 =====
@@ -159,25 +254,27 @@
     });
   });
 
-  // ===== 送信 =====
+  // ===== 送信（新規・編集の両方） =====
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    const submitBtn = form.querySelector('.btn-submit');
     submitBtn.disabled = true;
     messageEl.hidden = true;
 
     const fd = new FormData(form);
+    const isEdit = !!editingId;
+    const url = isEdit ? `/api/entries/${encodeURIComponent(editingId)}` : '/api/entries';
+    const method = isEdit ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch('/api/entries', { method: 'POST', body: fd });
+      const res = await fetch(url, { method, body: fd });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.ok) {
         throw new Error(json.error || `エラー: ${res.status}`);
       }
 
-      messageEl.textContent = 'ついかできたよ！ 🎉';
+      messageEl.textContent = isEdit ? 'なおせたよ！ ✨' : 'ついかできたよ！ 🎉';
       messageEl.className = 'form-message success';
       messageEl.hidden = false;
 
