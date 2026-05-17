@@ -248,7 +248,7 @@ body {
   cursor: pointer;
 }
 
-/* 写真選択ボタン */
+/* 写真選択ボタン（他のフォーム要素と統一） */
 .photo-picker {
   display: flex;
   flex-direction: column;
@@ -258,29 +258,30 @@ body {
 .btn-photo-pick {
   background: var(--cream);
   color: var(--text-main);
-  border: 2px dashed var(--sky-mid);
+  border: 2px solid var(--sky-light);
   border-radius: 16px;
-  padding: 1rem;
+  padding: 0.8rem 1rem;
   font: inherit;
-  font-weight: 700;
+  font-weight: 500;
+  text-align: left;
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+  transition: border-color 0.2s ease, background 0.2s ease;
 }
 
 .btn-photo-pick:hover, .btn-photo-pick:focus {
-  background: var(--sky-light);
   border-color: var(--sky-deep);
-  transform: translateY(-2px);
+  outline: none;
 }
 
-.btn-photo-pick:active {
-  transform: translateY(0);
-}
-
+/* プレビュー: hidden属性をきちんと効かせる（display:inline-block の上書き対策） */
 .photo-preview {
   position: relative;
   display: inline-block;
   max-width: 100%;
+}
+
+.photo-preview[hidden] {
+  display: none;
 }
 
 .photo-preview img {

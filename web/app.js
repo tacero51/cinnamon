@@ -126,7 +126,7 @@
     editingId = entry?.id || null;
 
     if (entry) {
-      formTitleEl.textContent = 'スイーツを なおす ✏️';
+      formTitleEl.textContent = 'スイーツのきろくを なおす ✏️';
       submitBtn.textContent = 'なおす';
       form.querySelector('input[name="name"]').value = entry.name || '';
       form.querySelector('input[name="where"]').value = entry.where || '';
@@ -135,7 +135,7 @@
       showExistingPhoto(entry.photo);
       deleteZone.hidden = false;
     } else {
-      formTitleEl.textContent = 'あたらしい スイーツ';
+      formTitleEl.textContent = 'あたらしい スイーツのきろく';
       submitBtn.textContent = 'とうこうする';
       form.reset();
       setRating(0);
@@ -299,8 +299,8 @@
   deleteBtn.addEventListener('click', async () => {
     if (!editingId) return;
     const entry = cachedEntries.find((x) => x.id === editingId);
-    const name = entry ? entry.name : 'これ';
-    if (!confirm(`「${name}」を ほんとうに けしていい？`)) return;
+    const name = entry && entry.name ? `「${entry.name}」` : 'このスイーツのきろく';
+    if (!confirm(`${name}を ほんとうに けしていい？`)) return;
 
     deleteBtn.disabled = true;
     submitBtn.disabled = true;
