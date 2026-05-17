@@ -56,6 +56,15 @@ export default {
       return methodNotAllowed();
     }
 
+    // 逆ジオコーディング: GPS座標 → 市区町村レベルの地名
+    if (url.pathname === '/api/geocode') {
+      if (request.method !== 'GET') return methodNotAllowed();
+      const lat = parseFloat(url.searchParams.get('lat'));
+      const lon = parseFloat(url.searchParams.get('lon'));
+      if (isNaN(lat) || isNaN(lon)) return error(400, 'lat and lon required');
+      return geocodeReverse(lat, lon);
+    }
+
     // Photo serving
     if (url.pathname.startsWith('/photos/')) {
       const key = url.pathname.slice(1); // remove leading /
@@ -119,9 +128,13 @@ async function postEntry(request, env) {
     photoUrl = `/${key}`;
   }
 
+  // 日付（任意。指定なければ今日。形式: YYYY-MM-DD）
+  const dateRaw = (form.get('date') || '').toString().trim();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : new Date().toISOString().slice(0, 10);
+
   const entry = {
     id: `${Date.now()}-${randomId(4)}`,
-    date: new Date().toISOString().slice(0, 10),
+    date,
     emoji,
     name,
     where: where || undefined,
@@ -214,6 +227,25 @@ async function putEntry(request, env, id) {
   });
 
   return json({ ok: true, entry: data.entries[idx] });
+}
+
+async function geocodeReverse(lat, lon) {
+  try {
+    // OpenStreetMap Nominatim（無料、API key不要、ただし1req/sec推奨）
+    // zoom=10 で市区町村レベル（精細すぎないように）
+    const url = `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lon}&format=json&zoom=10&addressdetails=1&accept-language=ja`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'cinnamon-sweet-diary/1.0' },
+    });
+    if (!res.ok) return json({ place: '' });
+    const data = await res.json();
+    const a = data.address || {};
+    // プライバシー配慮: 詳細な住所は使わず、市区町村レベルのみ
+    const place = a.city || a.town || a.village || a.suburb || a.county || a.state || '';
+    return json({ place });
+  } catch (e) {
+    return json({ place: '' });
+  }
 }
 
 async function deleteEntry(env, id) {

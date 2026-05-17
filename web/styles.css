@@ -248,6 +248,77 @@ body {
   cursor: pointer;
 }
 
+/* まとめてとうろく進捗オーバーレイ */
+.bulk-progress {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(74, 85, 104, 0.5);
+  backdrop-filter: blur(4px);
+  padding: 1rem;
+}
+
+.bulk-progress[hidden] {
+  display: none;
+}
+
+.bulk-progress-panel {
+  background: var(--white);
+  border-radius: 32px;
+  padding: 2rem 1.5rem;
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(127, 195, 224, 0.4);
+}
+
+.bulk-progress-panel h3 {
+  font-size: 1.2rem;
+  color: var(--text-main);
+  margin-bottom: 0.8rem;
+}
+
+#bulk-progress-text {
+  font-size: 1rem;
+  color: var(--text-soft);
+  margin-bottom: 1rem;
+}
+
+.bulk-progress-bar {
+  width: 100%;
+  height: 12px;
+  background: var(--sky-light);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.bulk-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--sky-mid), var(--sky-deep));
+  transition: width 0.3s ease;
+}
+
+.btn-bulk-close {
+  background: var(--sky-deep);
+  color: var(--white);
+  border: none;
+  border-radius: 16px;
+  padding: 0.8rem 1.6rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+.btn-bulk-close[hidden] {
+  display: none;
+}
+
 /* 写真選択ボタン（他のフォーム要素と統一） */
 .photo-picker {
   display: flex;
@@ -506,9 +577,16 @@ body {
   transform: scale(0.96);
 }
 
-/* さいしんにする ボタン（＋ボタンの左側に配置） */
+/* まとめてとうろくボタン（＋ボタンの左隣） */
+.fab-bulk {
+  right: calc(1.5rem + 64px + 0.8rem);
+  font-size: 1.3rem;
+  background: var(--sky-light);
+}
+
+/* さいしんにする ボタン（まとめてとうろくの左隣） */
 .fab-refresh {
-  right: calc(1.5rem + 64px + 1rem);
+  right: calc(1.5rem + 64px + 0.8rem + 64px + 0.8rem);
   font-size: 1.6rem;
 }
 

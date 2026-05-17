@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap">
-  <link rel="stylesheet" href="styles.css?v=20260517-1">
+  <link rel="stylesheet" href="styles.css?v=20260517-2">
 </head>
 <body>
   <!-- ふわふわ雲の背景装飾 -->
@@ -50,6 +50,12 @@
       <span>🔄</span>
     </button>
 
+    <!-- まとめてとうろくボタン -->
+    <input type="file" id="bulk-input" accept="image/*" multiple hidden>
+    <button id="bulk-btn" class="fab fab-bulk" aria-label="まとめてとうろく" title="しゃしんを まとめてとうろく">
+      <span>📷+</span>
+    </button>
+
     <!-- 投稿ボタン（FAB） -->
     <button id="open-form" class="fab" aria-label="スイーツを追加">
       <span>＋</span>
@@ -58,6 +64,18 @@
     <footer class="site-footer">
       <p>made with ☁️ by ミッフィー</p>
     </footer>
+  </div>
+
+  <!-- まとめてとうろくの進捗オーバーレイ -->
+  <div id="bulk-progress" class="bulk-progress" hidden>
+    <div class="bulk-progress-panel">
+      <h3 id="bulk-progress-title">とうろくちゅう...</h3>
+      <p id="bulk-progress-text">0 / 0</p>
+      <div class="bulk-progress-bar">
+        <div id="bulk-progress-fill" class="bulk-progress-fill"></div>
+      </div>
+      <button id="bulk-close-btn" class="btn-bulk-close" hidden>とじる</button>
+    </div>
   </div>
 
   <!-- 投稿/編集画面 -->
@@ -129,6 +147,8 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260517-1"></script>
+  <!-- EXIF抽出ライブラリ（写真から日付・GPS取得） -->
+  <script src="https://cdn.jsdelivr.net/npm/exifr@7/dist/lite.umd.js"></script>
+  <script src="app.js?v=20260517-2"></script>
 </body>
 </html>

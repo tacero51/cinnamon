@@ -359,6 +359,116 @@
     }
   });
 
+  // ===== まとめてとうろく =====
+
+  const bulkBtn = document.getElementById('bulk-btn');
+  const bulkInput = document.getElementById('bulk-input');
+  const bulkProgress = document.getElementById('bulk-progress');
+  const bulkProgressTitle = document.getElementById('bulk-progress-title');
+  const bulkProgressText = document.getElementById('bulk-progress-text');
+  const bulkProgressFill = document.getElementById('bulk-progress-fill');
+  const bulkCloseBtn = document.getElementById('bulk-close-btn');
+
+  bulkBtn.addEventListener('click', () => bulkInput.click());
+
+  bulkInput.addEventListener('change', async () => {
+    const files = Array.from(bulkInput.files || []);
+    bulkInput.value = ''; // 同じファイル再選択でも change が発火するように
+    if (!files.length) return;
+    await bulkUpload(files);
+  });
+
+  bulkCloseBtn.addEventListener('click', () => {
+    bulkProgress.hidden = true;
+    bulkCloseBtn.hidden = true;
+  });
+
+  function updateProgress(done, total, succeeded) {
+    bulkProgressText.textContent = `${done} / ${total}（できた: ${succeeded}）`;
+    const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+    bulkProgressFill.style.width = pct + '%';
+  }
+
+  // EXIFから日付とGPSを抽出
+  async function extractExif(file) {
+    if (typeof exifr === 'undefined') return { date: null, lat: null, lon: null };
+    try {
+      const data = await exifr.parse(file, {
+        pick: ['DateTimeOriginal', 'CreateDate', 'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'latitude', 'longitude'],
+      });
+      if (!data) return { date: null, lat: null, lon: null };
+      const dateObj = data.DateTimeOriginal || data.CreateDate || null;
+      let date = null;
+      if (dateObj instanceof Date && !isNaN(dateObj.getTime())) {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        date = `${y}-${m}-${d}`;
+      }
+      const lat = typeof data.latitude === 'number' ? data.latitude : null;
+      const lon = typeof data.longitude === 'number' ? data.longitude : null;
+      return { date, lat, lon };
+    } catch (e) {
+      console.warn('EXIF extract failed', e);
+      return { date: null, lat: null, lon: null };
+    }
+  }
+
+  // 座標 → 地名（Worker経由）
+  async function reverseGeocode(lat, lon) {
+    try {
+      const res = await fetch(`/api/geocode?lat=${lat}&lon=${lon}`);
+      if (!res.ok) return '';
+      const data = await res.json();
+      return data.place || '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  async function uploadOne(file, date, place) {
+    const fd = new FormData();
+    fd.append('photo', file);
+    if (date) fd.append('date', date);
+    if (place) fd.append('where', place);
+    const res = await fetch('/api/entries', { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('upload failed: ' + res.status);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'unknown');
+    return json.entry;
+  }
+
+  async function bulkUpload(files) {
+    bulkProgress.hidden = false;
+    bulkCloseBtn.hidden = true;
+    bulkProgressTitle.textContent = 'とうろくちゅう...';
+    let done = 0;
+    let succeeded = 0;
+    updateProgress(0, files.length, 0);
+
+    for (const file of files) {
+      try {
+        const exif = await extractExif(file);
+        let place = '';
+        if (exif.lat != null && exif.lon != null) {
+          place = await reverseGeocode(exif.lat, exif.lon);
+        }
+        await uploadOne(file, exif.date, place);
+        succeeded++;
+      } catch (e) {
+        console.error('bulk upload error for', file.name, e);
+      }
+      done++;
+      updateProgress(done, files.length, succeeded);
+    }
+
+    bulkProgressTitle.textContent = succeeded === files.length
+      ? `${succeeded}まい ぜんぶできたよ！🎉`
+      : `${succeeded}/${files.length}まい とうろくできたよ`;
+    bulkCloseBtn.hidden = false;
+    await refresh();
+  }
+
   // ===== リフレッシュボタン =====
 
   const refreshBtn = document.getElementById('refresh-btn');
