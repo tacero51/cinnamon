@@ -263,14 +263,10 @@
     photoPickBtn.textContent = '📷 しゃしんを えらぶ';
   });
 
-  // フォームリセット時にプレビューもクリア
-  form.addEventListener('reset', () => {
-    setTimeout(() => {
-      photoPreview.hidden = true;
-      photoPreviewImg.src = '';
-      photoPickBtn.textContent = '📷 しゃしんを えらぶ';
-    }, 0);
-  });
+  // フォームリセット時の写真プレビュークリアは、
+  // showPostView / showHomeView で明示的に行うため、ここでは行わない
+  // （setTimeout(0) を使うと showPostView の同期処理後に発火して
+  //  プレビュー設定を上書きしてしまうバグがあったため削除）
 
   // ===== 評価選択 =====
 
