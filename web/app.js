@@ -145,6 +145,8 @@
       form.querySelector('input[name="where"]').value = entry.where || '';
       form.querySelector('textarea[name="comment"]').value = entry.comment || '';
       setRating(Number(entry.rating) || 0);
+      // 日付: 既存の日付があればそれを、なければ今日
+      setDateField(entry.date || todayString());
 
       // 既存の写真があれば、新規選択と同じプレビューUIで表示
       if (entry.photo) {
@@ -158,6 +160,8 @@
     } else {
       formTitleEl.textContent = 'あたらしい きろく';
       submitBtn.textContent = 'とうこうする';
+      // 新規: 日付のデフォルトは今日。写真を選んだらEXIFで上書きされる
+      setDateField(todayString());
       deleteZone.hidden = true;
     }
 
@@ -249,12 +253,11 @@
     existingPhotoUrl = null;
     removeRemovePhotoFlag();
 
-    // EXIFから撮影日を取得して隠しフィールドにセット
+    // EXIFから撮影日を取得 → あれば日付フィールドを撮影日に上書き
+    // （なければ既存の日付（今日 or 編集前の日付）を維持）
     const exifDate = await extractPhotoDate(file);
     if (exifDate) {
       setDateField(exifDate);
-    } else {
-      clearDateField();
     }
 
     const reader = new FileReader();
@@ -297,20 +300,22 @@
     return null;
   }
 
+  const dateInput = document.getElementById('date-input');
+
   function setDateField(date) {
-    let dateInput = form.querySelector('input[name="date"]');
-    if (!dateInput) {
-      dateInput = document.createElement('input');
-      dateInput.type = 'hidden';
-      dateInput.name = 'date';
-      form.appendChild(dateInput);
-    }
-    dateInput.value = date;
+    if (dateInput) dateInput.value = date || '';
   }
 
   function clearDateField() {
-    const dateInput = form.querySelector('input[name="date"]');
-    if (dateInput) dateInput.remove();
+    if (dateInput) dateInput.value = '';
+  }
+
+  function todayString() {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${da}`;
   }
 
   // フォームリセット時の写真プレビュークリアは、
