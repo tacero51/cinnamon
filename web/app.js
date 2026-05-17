@@ -52,9 +52,7 @@
   function renderEntry(entry) {
     const nameRaw = (entry.name || '').trim();
     const name = escapeHTML(nameRaw);
-    const nameHtml = nameRaw
-      ? `<h2 class="entry-name">${name}</h2>`
-      : `<h2 class="entry-name entry-name-empty">スイーツ</h2>`;
+    const nameHtml = nameRaw ? `<h2 class="entry-name">${name}</h2>` : '';
     const date = escapeHTML(formatDate(entry.date));
     const where = entry.where ? `<span class="entry-where">${escapeHTML(entry.where)}</span>` : '';
     const rating = renderStars(entry.rating);
