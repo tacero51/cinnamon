@@ -91,10 +91,14 @@
     entriesEl.hidden = false;
     emptyEl.hidden = true;
 
+    // 撮影日(date)を優先して新しい順に。同日は created_at で新しい順
     const sorted = [...entries].sort((a, b) => {
-      const da = new Date(a.created_at || a.date || 0).getTime();
-      const db = new Date(b.created_at || b.date || 0).getTime();
-      return db - da;
+      const dateA = a.date || '';
+      const dateB = b.date || '';
+      if (dateA !== dateB) return dateA < dateB ? 1 : -1;
+      const ca = new Date(a.created_at || 0).getTime();
+      const cb = new Date(b.created_at || 0).getTime();
+      return cb - ca;
     });
 
     entriesEl.innerHTML = sorted.map(renderEntry).join('');
