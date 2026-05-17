@@ -211,8 +211,13 @@ async function putEntry(request, env, id) {
     photoUrl = undefined;
   }
 
+  // 日付（任意。指定があれば上書き、なければ既存維持）
+  const dateRaw = (form.get('date') || '').toString().trim();
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : existing.date;
+
   data.entries[idx] = {
     ...existing,
+    date,
     name,
     emoji,
     where: where || undefined,

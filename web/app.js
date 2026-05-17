@@ -132,6 +132,7 @@
     form.reset();
     setRating(0);
     removeRemovePhotoFlag();
+    clearDateField();
     if (photoInput) photoInput.value = '';
     if (photoPreview) photoPreview.hidden = true;
     if (photoPreviewImg) photoPreviewImg.src = '';
@@ -175,6 +176,7 @@
     messageEl.hidden = true;
     messageEl.className = 'form-message';
     removeRemovePhotoFlag();
+    clearDateField();
     if (photoPreview) photoPreview.hidden = true;
     if (photoPreviewImg) photoPreviewImg.src = '';
     if (photoPickBtn) photoPickBtn.textContent = '📷 しゃしんを えらぶ';
@@ -237,7 +239,7 @@
 
   photoPickBtn.addEventListener('click', () => photoInput.click());
 
-  photoInput.addEventListener('change', () => {
+  photoInput.addEventListener('change', async () => {
     const file = photoInput.files[0];
     if (!file) {
       // キャンセル時は何もしない（既存写真があればそのまま）
@@ -246,6 +248,15 @@
     // 新しい写真を選択 → プレビュー更新、既存写真の参照は捨てる
     existingPhotoUrl = null;
     removeRemovePhotoFlag();
+
+    // EXIFから撮影日を取得して隠しフィールドにセット
+    const exifDate = await extractPhotoDate(file);
+    if (exifDate) {
+      setDateField(exifDate);
+    } else {
+      clearDateField();
+    }
+
     const reader = new FileReader();
     reader.onload = (e) => {
       photoPreviewImg.src = e.target.result;
@@ -265,7 +276,42 @@
     photoPreview.hidden = true;
     photoPreviewImg.src = '';
     photoPickBtn.textContent = '📷 しゃしんを えらぶ';
+    clearDateField();
   });
+
+  // 単発投稿用: 写真から撮影日（YYYY-MM-DD）を抽出
+  async function extractPhotoDate(file) {
+    if (typeof exifr === 'undefined') return null;
+    try {
+      const data = await exifr.parse(file, { pick: ['DateTimeOriginal', 'CreateDate'] });
+      const dateObj = data?.DateTimeOriginal || data?.CreateDate;
+      if (dateObj instanceof Date && !isNaN(dateObj.getTime())) {
+        const y = dateObj.getFullYear();
+        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+        const d = String(dateObj.getDate()).padStart(2, '0');
+        return `${y}-${m}-${d}`;
+      }
+    } catch (e) {
+      console.warn('EXIF date extract failed', e);
+    }
+    return null;
+  }
+
+  function setDateField(date) {
+    let dateInput = form.querySelector('input[name="date"]');
+    if (!dateInput) {
+      dateInput = document.createElement('input');
+      dateInput.type = 'hidden';
+      dateInput.name = 'date';
+      form.appendChild(dateInput);
+    }
+    dateInput.value = date;
+  }
+
+  function clearDateField() {
+    const dateInput = form.querySelector('input[name="date"]');
+    if (dateInput) dateInput.remove();
+  }
 
   // フォームリセット時の写真プレビュークリアは、
   // showPostView / showHomeView で明示的に行うため、ここでは行わない
