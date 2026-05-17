@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap">
-  <link rel="stylesheet" href="styles.css?v=20260517-8">
+  <link rel="stylesheet" href="styles.css?v=20260517-9">
 </head>
 <body>
   <!-- ふわふわ雲の背景装飾 -->
@@ -37,6 +37,12 @@
     </header>
 
     <main class="entries-section">
+      <div class="sort-bar" id="sort-bar">
+        <button class="sort-btn active" data-sort="newest">🆕 あたらしい順</button>
+        <button class="sort-btn" data-sort="oldest">📅 ふるい順</button>
+        <button class="sort-btn" data-sort="rating-desc">⭐ おおい順</button>
+        <button class="sort-btn" data-sort="rating-asc">☆ すくない順</button>
+      </div>
       <div id="entries" class="entries-grid">
         <!-- JS で挿入される -->
       </div>
@@ -155,6 +161,6 @@
 
   <!-- EXIF抽出ライブラリ（写真から日付・GPS取得） -->
   <script src="https://cdn.jsdelivr.net/npm/exifr@7/dist/lite.umd.js"></script>
-  <script src="app.js?v=20260517-8"></script>
+  <script src="app.js?v=20260517-9"></script>
 </body>
 </html>

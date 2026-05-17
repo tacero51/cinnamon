@@ -9,6 +9,7 @@
   const postView = document.getElementById('post-view');
 
   let cachedEntries = [];
+  let currentSort = localStorage.getItem('cinnamon.sort') || 'newest';
 
   // ===== エントリ表示 =====
 
@@ -91,17 +92,63 @@
     entriesEl.hidden = false;
     emptyEl.hidden = true;
 
-    // 撮影日(date)を優先して新しい順に。同日は created_at で新しい順
-    const sorted = [...entries].sort((a, b) => {
-      const dateA = a.date || '';
-      const dateB = b.date || '';
-      if (dateA !== dateB) return dateA < dateB ? 1 : -1;
+    const sorted = sortEntries(entries, currentSort);
+
+    entriesEl.innerHTML = sorted.map(renderEntry).join('');
+  }
+
+  // ===== ソート =====
+
+  function sortEntries(entries, mode) {
+    const list = [...entries];
+    const byDateDesc = (a, b) => {
+      const da = a.date || '';
+      const db = b.date || '';
+      if (da !== db) return da < db ? 1 : -1;
       const ca = new Date(a.created_at || 0).getTime();
       const cb = new Date(b.created_at || 0).getTime();
       return cb - ca;
+    };
+    const byDateAsc = (a, b) => -byDateDesc(a, b);
+
+    switch (mode) {
+      case 'oldest':
+        return list.sort(byDateAsc);
+      case 'rating-desc':
+        return list.sort((a, b) => {
+          const diff = (Number(b.rating) || 0) - (Number(a.rating) || 0);
+          return diff !== 0 ? diff : byDateDesc(a, b);
+        });
+      case 'rating-asc':
+        return list.sort((a, b) => {
+          const diff = (Number(a.rating) || 0) - (Number(b.rating) || 0);
+          return diff !== 0 ? diff : byDateDesc(a, b);
+        });
+      case 'newest':
+      default:
+        return list.sort(byDateDesc);
+    }
+  }
+
+  const sortBar = document.getElementById('sort-bar');
+  if (sortBar) {
+    // 初期: localStorage の現在ソートをactive表示
+    sortBar.querySelectorAll('.sort-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.sort === currentSort);
     });
 
-    entriesEl.innerHTML = sorted.map(renderEntry).join('');
+    sortBar.addEventListener('click', (e) => {
+      const btn = e.target.closest('.sort-btn');
+      if (!btn) return;
+      const mode = btn.dataset.sort;
+      if (!mode || mode === currentSort) return;
+      currentSort = mode;
+      localStorage.setItem('cinnamon.sort', mode);
+      sortBar.querySelectorAll('.sort-btn').forEach((b) => {
+        b.classList.toggle('active', b === btn);
+      });
+      render(cachedEntries);
+    });
   }
 
   async function refresh() {

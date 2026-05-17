@@ -138,6 +138,40 @@ body {
   padding: 1rem 1.5rem;
 }
 
+/* ===== ソートバー ===== */
+.sort-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+}
+
+.sort-btn {
+  background: rgba(255, 255, 255, 0.85);
+  border: 2px solid transparent;
+  border-radius: 20px;
+  padding: 0.4rem 0.9rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-main);
+  cursor: pointer;
+  box-shadow: 0 2px 6px var(--shadow-cloud);
+  transition: transform 0.15s ease, background 0.2s ease, border-color 0.2s ease;
+}
+
+.sort-btn:hover, .sort-btn:focus {
+  background: var(--white);
+  transform: translateY(-1px);
+}
+
+.sort-btn.active {
+  background: var(--white);
+  border-color: var(--sky-deep);
+  color: var(--sky-deep);
+}
+
 .entries-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
