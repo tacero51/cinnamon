@@ -123,8 +123,16 @@
   function showPostView(entry = null) {
     editingId = entry?.id || null;
 
+    // 共通: 新規選択した写真状態をクリア（前回の状態が残らないように）
+    form.reset();
+    setRating(0);
+    if (photoInput) photoInput.value = '';
+    if (photoPreview) photoPreview.hidden = true;
+    if (photoPreviewImg) photoPreviewImg.src = '';
+    if (photoPickBtn) photoPickBtn.textContent = '📷 しゃしんを えらぶ';
+
     if (entry) {
-      formTitleEl.textContent = 'スイーツのきろくを なおす ✏️';
+      formTitleEl.textContent = 'なおす ✏️';
       submitBtn.textContent = 'なおす';
       form.querySelector('input[name="name"]').value = entry.name || '';
       form.querySelector('input[name="where"]').value = entry.where || '';
@@ -133,10 +141,8 @@
       showExistingPhoto(entry.photo);
       deleteZone.hidden = false;
     } else {
-      formTitleEl.textContent = 'あたらしい スイーツのきろく';
+      formTitleEl.textContent = 'あたらしい きろく';
       submitBtn.textContent = 'とうこうする';
-      form.reset();
-      setRating(0);
       hideExistingPhoto();
       deleteZone.hidden = true;
     }
