@@ -8,3 +8,4 @@
 # 一時ファイル
 *.tmp
 *.log
+node_modules/
