@@ -113,19 +113,21 @@
   const messageEl = document.getElementById('form-message');
   const formTitleEl = document.getElementById('form-title');
   const submitBtn = form.querySelector('.btn-submit');
-  const existingPhotoContainerId = 'existing-photo';
 
   let editingId = null;
+  let existingPhotoUrl = null; // 編集モードで既存の写真URL
 
   const deleteZone = document.getElementById('delete-zone');
   const deleteBtn = document.getElementById('delete-btn');
 
   function showPostView(entry = null) {
     editingId = entry?.id || null;
+    existingPhotoUrl = null;
 
-    // 共通: 新規選択した写真状態をクリア（前回の状態が残らないように）
+    // 共通リセット
     form.reset();
     setRating(0);
+    removeRemovePhotoFlag();
     if (photoInput) photoInput.value = '';
     if (photoPreview) photoPreview.hidden = true;
     if (photoPreviewImg) photoPreviewImg.src = '';
@@ -138,12 +140,19 @@
       form.querySelector('input[name="where"]').value = entry.where || '';
       form.querySelector('textarea[name="comment"]').value = entry.comment || '';
       setRating(Number(entry.rating) || 0);
-      showExistingPhoto(entry.photo);
+
+      // 既存の写真があれば、新規選択と同じプレビューUIで表示
+      if (entry.photo) {
+        existingPhotoUrl = entry.photo;
+        photoPreviewImg.src = entry.photo;
+        photoPreview.hidden = false;
+        photoPickBtn.textContent = '📷 しゃしんを かえる';
+      }
+
       deleteZone.hidden = false;
     } else {
       formTitleEl.textContent = 'あたらしい きろく';
       submitBtn.textContent = 'とうこうする';
-      hideExistingPhoto();
       deleteZone.hidden = true;
     }
 
@@ -156,11 +165,15 @@
 
   function showHomeView() {
     editingId = null;
+    existingPhotoUrl = null;
     form.reset();
     setRating(0);
     messageEl.hidden = true;
     messageEl.className = 'form-message';
-    hideExistingPhoto();
+    removeRemovePhotoFlag();
+    if (photoPreview) photoPreview.hidden = true;
+    if (photoPreviewImg) photoPreviewImg.src = '';
+    if (photoPickBtn) photoPickBtn.textContent = '📷 しゃしんを えらぶ';
 
     postView.hidden = true;
     homeView.hidden = false;
@@ -175,34 +188,21 @@
     }
   }
 
-  // 既存写真のプレビュー（編集時）
-  function showExistingPhoto(photoUrl) {
-    let el = document.getElementById(existingPhotoContainerId);
-    if (!el) {
-      const photoField = form.querySelector('input[name="photo"]').closest('.field');
-      el = document.createElement('div');
-      el.id = existingPhotoContainerId;
-      el.className = 'existing-photo';
-      photoField.appendChild(el);
+  // 「写真を削除する」フラグ操作（編集時に既存写真を消す場合）
+  function setRemovePhotoFlag() {
+    let flag = form.querySelector('input[name="remove_photo"]');
+    if (!flag) {
+      flag = document.createElement('input');
+      flag.type = 'hidden';
+      flag.name = 'remove_photo';
+      form.appendChild(flag);
     }
-    if (photoUrl) {
-      el.innerHTML = `
-        <img src="${escapeHTML(photoUrl)}" alt="いまの しゃしん">
-        <label class="remove-photo-label">
-          <input type="checkbox" name="remove_photo" value="1">
-          <span>この しゃしんを けす</span>
-        </label>
-      `;
-      el.hidden = false;
-    } else {
-      el.hidden = true;
-      el.innerHTML = '';
-    }
+    flag.value = '1';
   }
 
-  function hideExistingPhoto() {
-    const el = document.getElementById(existingPhotoContainerId);
-    if (el) { el.hidden = true; el.innerHTML = ''; }
+  function removeRemovePhotoFlag() {
+    const flag = form.querySelector('input[name="remove_photo"]');
+    if (flag) flag.remove();
   }
 
   // 投稿ボタン
@@ -236,11 +236,12 @@
   photoInput.addEventListener('change', () => {
     const file = photoInput.files[0];
     if (!file) {
-      photoPreview.hidden = true;
-      photoPreviewImg.src = '';
-      photoPickBtn.textContent = '📷 しゃしんを えらぶ';
+      // キャンセル時は何もしない（既存写真があればそのまま）
       return;
     }
+    // 新しい写真を選択 → プレビュー更新、既存写真の参照は捨てる
+    existingPhotoUrl = null;
+    removeRemovePhotoFlag();
     const reader = new FileReader();
     reader.onload = (e) => {
       photoPreviewImg.src = e.target.result;
@@ -251,6 +252,11 @@
   });
 
   photoClearBtn.addEventListener('click', () => {
+    // 既存写真を消す場合は remove_photo フラグを立てる
+    if (existingPhotoUrl && !photoInput.files.length) {
+      setRemovePhotoFlag();
+      existingPhotoUrl = null;
+    }
     photoInput.value = '';
     photoPreview.hidden = true;
     photoPreviewImg.src = '';
