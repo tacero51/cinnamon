@@ -24,7 +24,7 @@ html, body {
 }
 
 body {
-  font-family: 'M PLUS Rounded 1c', sans-serif;
+  font-family: 'Hiragino Maru Gothic ProN', 'Yu Gothic', 'Hiragino Sans', sans-serif;
   font-weight: 500;
   color: var(--text-main);
   background: linear-gradient(180deg, var(--sky-light) 0%, var(--sky-mid) 55%, var(--sky-deep) 100%);
@@ -309,10 +309,29 @@ body {
 }
 
 .bulk-progress-fill {
+  appearance: none;
+  -webkit-appearance: none;
+  display: block;
   height: 100%;
-  width: 0%;
+  width: 100%;
+  border: none;
+  background: transparent;
+}
+
+.bulk-progress-fill::-webkit-progress-bar {
+  background: var(--sky-light);
+  border-radius: 6px;
+}
+
+.bulk-progress-fill::-webkit-progress-value {
   background: linear-gradient(90deg, var(--sky-mid), var(--sky-deep));
+  border-radius: 6px;
   transition: width 0.3s ease;
+}
+
+.bulk-progress-fill::-moz-progress-bar {
+  background: linear-gradient(90deg, var(--sky-mid), var(--sky-deep));
+  border-radius: 6px;
 }
 
 .btn-bulk-close {
@@ -775,6 +794,7 @@ body {
 }
 
 #entry-form input[type="text"],
+#entry-form select,
 #entry-form textarea {
   width: 100%;
   padding: 0.8rem 1rem;
@@ -787,6 +807,7 @@ body {
 }
 
 #entry-form input[type="text"]:focus,
+#entry-form select:focus,
 #entry-form textarea:focus {
   outline: none;
   border-color: var(--sky-deep);

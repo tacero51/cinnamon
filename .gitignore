@@ -9,3 +9,11 @@
 *.tmp
 *.log
 node_modules/
+.wrangler/
+
+# Cloudflare Worker secrets（ローカル開発用もコミットしない）
+.dev.vars
+.dev.vars.*
+.env
+.env.*
+!.env.example

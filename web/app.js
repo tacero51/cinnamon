@@ -3,6 +3,7 @@
   'use strict';
 
   const ENTRIES_URL = '/api/entries';
+  const SAFE_WHERE_VALUES = new Set(['', 'おうち', 'おみせ', 'カフェ', 'おでかけ', 'そのほか']);
   const entriesEl = document.getElementById('entries');
   const emptyEl = document.getElementById('empty-state');
   const homeView = document.getElementById('home-view');
@@ -189,7 +190,8 @@
       formTitleEl.textContent = 'なおす ✏️';
       submitBtn.textContent = 'なおす';
       form.querySelector('input[name="name"]').value = entry.name || '';
-      form.querySelector('input[name="where"]').value = entry.where || '';
+      const whereInput = form.querySelector('[name="where"]');
+      whereInput.value = SAFE_WHERE_VALUES.has(entry.where || '') ? (entry.where || '') : '';
       form.querySelector('textarea[name="comment"]').value = entry.comment || '';
       setRating(Number(entry.rating) || 0);
       // 日付: 既存の日付があればそれを、なければ今日
@@ -207,7 +209,7 @@
     } else {
       formTitleEl.textContent = 'あたらしい きろく';
       submitBtn.textContent = 'とうこうする';
-      // 新規: 日付のデフォルトは今日。写真を選んだらEXIFで上書きされる
+      // 新規: 日付のデフォルトは今日。写真のメタデータは読まない。
       setDateField(todayString());
       deleteZone.hidden = true;
     }
@@ -300,13 +302,6 @@
     existingPhotoUrl = null;
     removeRemovePhotoFlag();
 
-    // EXIFから撮影日を取得 → あれば日付フィールドを撮影日に上書き
-    // （なければ既存の日付（今日 or 編集前の日付）を維持）
-    const exifDate = await extractPhotoDate(file);
-    if (exifDate) {
-      setDateField(exifDate);
-    }
-
     const reader = new FileReader();
     reader.onload = (e) => {
       photoPreviewImg.src = e.target.result;
@@ -328,24 +323,6 @@
     photoPickBtn.textContent = '📷 しゃしんを えらぶ';
     clearDateField();
   });
-
-  // 単発投稿用: 写真から撮影日（YYYY-MM-DD）を抽出
-  async function extractPhotoDate(file) {
-    if (typeof exifr === 'undefined') return null;
-    try {
-      const data = await exifr.parse(file, { pick: ['DateTimeOriginal', 'CreateDate'] });
-      const dateObj = data?.DateTimeOriginal || data?.CreateDate;
-      if (dateObj instanceof Date && !isNaN(dateObj.getTime())) {
-        const y = dateObj.getFullYear();
-        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const d = String(dateObj.getDate()).padStart(2, '0');
-        return `${y}-${m}-${d}`;
-      }
-    } catch (e) {
-      console.warn('EXIF date extract failed', e);
-    }
-    return null;
-  }
 
   const dateInput = document.getElementById('date-input');
 
@@ -496,51 +473,13 @@
   function updateProgress(done, total, succeeded) {
     bulkProgressText.textContent = `${done} / ${total}（できた: ${succeeded}）`;
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
-    bulkProgressFill.style.width = pct + '%';
+    bulkProgressFill.value = pct;
   }
 
-  // EXIFから日付とGPSを抽出
-  async function extractExif(file) {
-    if (typeof exifr === 'undefined') return { date: null, lat: null, lon: null };
-    try {
-      const data = await exifr.parse(file, {
-        pick: ['DateTimeOriginal', 'CreateDate', 'GPSLatitude', 'GPSLongitude', 'GPSLatitudeRef', 'GPSLongitudeRef', 'latitude', 'longitude'],
-      });
-      if (!data) return { date: null, lat: null, lon: null };
-      const dateObj = data.DateTimeOriginal || data.CreateDate || null;
-      let date = null;
-      if (dateObj instanceof Date && !isNaN(dateObj.getTime())) {
-        const y = dateObj.getFullYear();
-        const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-        const d = String(dateObj.getDate()).padStart(2, '0');
-        date = `${y}-${m}-${d}`;
-      }
-      const lat = typeof data.latitude === 'number' ? data.latitude : null;
-      const lon = typeof data.longitude === 'number' ? data.longitude : null;
-      return { date, lat, lon };
-    } catch (e) {
-      console.warn('EXIF extract failed', e);
-      return { date: null, lat: null, lon: null };
-    }
-  }
-
-  // 座標 → 地名（Worker経由）
-  async function reverseGeocode(lat, lon) {
-    try {
-      const res = await fetch(`/api/geocode?lat=${lat}&lon=${lon}`);
-      if (!res.ok) return '';
-      const data = await res.json();
-      return data.place || '';
-    } catch (e) {
-      return '';
-    }
-  }
-
-  async function uploadOne(file, date, place) {
+  // 写真のEXIFはブラウザ側でも読まない。日付はフォーム入力または登録日にする。
+  async function uploadOne(file) {
     const fd = new FormData();
     fd.append('photo', file);
-    if (date) fd.append('date', date);
-    if (place) fd.append('where', place);
     const res = await fetch('/api/entries', { method: 'POST', body: fd });
     if (!res.ok) throw new Error('upload failed: ' + res.status);
     const json = await res.json();
@@ -558,12 +497,7 @@
 
     for (const file of files) {
       try {
-        const exif = await extractExif(file);
-        let place = '';
-        if (exif.lat != null && exif.lon != null) {
-          place = await reverseGeocode(exif.lat, exif.lon);
-        }
-        await uploadOne(file, exif.date, place);
+        await uploadOne(file);
         succeeded++;
       } catch (e) {
         console.error('bulk upload error for', file.name, e);

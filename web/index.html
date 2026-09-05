@@ -3,11 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex, nofollow">
   <title>ミッフィーのスイーツ日記</title>
   <meta name="description" content="食べたスイーツを記録するふわふわ日記">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;500;700;800&display=swap">
   <link rel="stylesheet" href="styles.css?v=20260517-9">
 </head>
 <body>
@@ -57,7 +55,7 @@
     </button>
 
     <!-- まとめてとうろくボタン -->
-    <input type="file" id="bulk-input" accept="image/*" multiple hidden>
+    <input type="file" id="bulk-input" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" multiple hidden>
     <button id="bulk-btn" class="fab fab-bulk" aria-label="まとめてとうろく" title="しゃしんを まとめてとうろく">
       <span>📷+</span>
     </button>
@@ -78,7 +76,7 @@
       <h3 id="bulk-progress-title">とうろくちゅう...</h3>
       <p id="bulk-progress-text">0 / 0</p>
       <div class="bulk-progress-bar">
-        <div id="bulk-progress-fill" class="bulk-progress-fill"></div>
+        <progress id="bulk-progress-fill" class="bulk-progress-fill" max="100" value="0" aria-label="とうろくの しんちょく"></progress>
       </div>
       <button id="bulk-close-btn" class="btn-bulk-close" hidden>とじる</button>
     </div>
@@ -96,7 +94,7 @@
         <div class="field">
           <span class="field-label">しゃしん（あるなら）</span>
           <div class="photo-picker">
-            <input type="file" id="photo-input" name="photo" accept="image/*" hidden>
+            <input type="file" id="photo-input" name="photo" accept="image/jpeg,image/png,image/webp,image/heic,image/heif" hidden>
             <button type="button" id="photo-pick-btn" class="btn-photo-pick">
               📷 しゃしんを えらぶ
             </button>
@@ -111,7 +109,7 @@
         <label class="field">
           <span class="field-label">いつ たべた？</span>
           <input type="date" name="date" id="date-input">
-          <small class="field-hint">しゃしんを えらぶと しゃしんの ひづけが はいるよ</small>
+          <small class="field-hint">たべた ひづけを えらんでね</small>
         </label>
 
         <label class="field">
@@ -120,9 +118,16 @@
         </label>
 
         <label class="field">
-          <span class="field-label">どこで たべた？</span>
-          <input type="text" name="where" maxlength="50" placeholder="おうち / カフェ / こうえん など">
-          <small class="field-hint">学校・お店の名前など、ばしょがわかるものはひかえてね</small>
+          <span class="field-label">どんな ばしょで たべた？</span>
+          <select name="where">
+            <option value="">かかない</option>
+            <option value="おうち">おうち</option>
+            <option value="おみせ">おみせ</option>
+            <option value="カフェ">カフェ</option>
+            <option value="おでかけ">おでかけ</option>
+            <option value="そのほか">そのほか</option>
+          </select>
+          <small class="field-hint">学校・お店のなまえなど、くわしいばしょは かかないでね</small>
         </label>
 
         <label class="field">
@@ -159,8 +164,6 @@
     </main>
   </div>
 
-  <!-- EXIF抽出ライブラリ（写真から日付・GPS取得） -->
-  <script src="https://cdn.jsdelivr.net/npm/exifr@7/dist/lite.umd.js"></script>
   <script src="app.js?v=20260517-9"></script>
 </body>
 </html>
