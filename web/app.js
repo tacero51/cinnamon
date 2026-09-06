@@ -8,6 +8,13 @@
   const emptyEl = document.getElementById('empty-state');
   const homeView = document.getElementById('home-view');
   const postView = document.getElementById('post-view');
+  const discoveryView = document.getElementById('discovery-view');
+  const discovery = window.CinnamonDiscovery;
+  let discoveryMode = 'five';
+  let discoveryPlace = null;
+  let entriesLoaded = false;
+  let entriesLoadFailed = false;
+  let entriesRequestSequence = 0;
 
   let cachedEntries = [];
   let currentSort = localStorage.getItem('cinnamon.sort') || 'newest';
@@ -91,6 +98,7 @@
 
   function render(entries) {
     cachedEntries = entries;
+    if (!discoveryView.hidden) renderDiscovery();
     if (!entries.length) {
       entriesEl.hidden = true;
       emptyEl.hidden = false;
@@ -159,8 +167,22 @@
   }
 
   async function refresh() {
+    const requestSequence = ++entriesRequestSequence;
     const snapshot = await loadEntries();
-    if (!snapshot) return false;
+    // A slower, older response must not replace newer data or error state.
+    if (requestSequence !== entriesRequestSequence) return false;
+    if (!snapshot) {
+      entriesLoadFailed = true;
+      if (!discoveryView.hidden) {
+        document.getElementById('discovery-status').textContent = entriesLoaded
+          ? 'さいしんの記録を よめなかったよ。前によんだ記録を ひょうじしているよ。'
+          : '記録を よめなかったよ。もういちど ためしてね。';
+        document.getElementById('discovery-retry').hidden = false;
+      }
+      return false;
+    }
+    entriesLoaded = true;
+    entriesLoadFailed = false;
     entriesETag = snapshot.etag;
     render(snapshot.entries);
     return true;
@@ -227,6 +249,7 @@
     }
 
     homeView.hidden = true;
+    discoveryView.hidden = true;
     postView.hidden = false;
     window.scrollTo(0, 0);
     // ブラウザ履歴に追加（戻るボタン対応）
@@ -248,6 +271,7 @@
     if (photoPickBtn) photoPickBtn.textContent = '📷 しゃしんを えらぶ';
 
     postView.hidden = true;
+    discoveryView.hidden = true;
     homeView.hidden = false;
     // 編集画面から戻った時は、競合後にも必ず最新の一覧を取り直す。
     if (reload) void refresh();
@@ -311,9 +335,109 @@
 
   // ブラウザ「戻る」対応
   window.addEventListener('popstate', () => {
-    if (!postView.hidden) {
+    if (window.location.hash === '#discover') {
+      showDiscovery({ push: false });
+    } else if (!postView.hidden || !discoveryView.hidden) {
+      const fromDiscovery = !discoveryView.hidden;
       showHomeView();
+      if (fromDiscovery) document.getElementById('open-discovery').focus();
     }
+  });
+
+  // ===== 好き発見（既存の記録だけで見比べる） =====
+
+  function discoveryCard(entry) {
+    const name = escapeHTML(entry.name || 'なまえのない スイーツ');
+    const score = discovery.rating(entry);
+    const stars = score === null ? '★は まだつけていないよ' : `${'★'.repeat(score)} <span>${score} / 5</span>`;
+    const photo = typeof entry.photo === 'string' && /^\/photos\/secure\/[a-zA-Z0-9/_-]+\.webp$/.test(entry.photo)
+      ? `<img src="${escapeHTML(entry.photo)}" alt="${name}" loading="lazy">` : '';
+    const location = discovery.place(entry) || 'ばしょ未記入';
+    return `<article class="discovery-card">${photo}<div class="discovery-card-body">
+      <h3>${name}</h3><p class="discovery-rating" aria-label="${score === null ? '星は未回答' : `星${score}つ、5点満点`}">${stars}</p>
+      <p class="discovery-meta">${[escapeHTML(formatDate(entry.date)), location].filter(Boolean).join(' · ')}</p>
+      ${entry.comment ? `<p>${escapeHTML(entry.comment)}</p>` : ''}</div></article>`;
+  }
+
+  function renderDiscovery() {
+    if (!entriesLoaded) return;
+    const summary = discovery.summarize(cachedEntries);
+    document.getElementById('discovery-summary').innerHTML = [
+      [summary.total, '記録ぜんぶ'], [summary.five, '★5の記録'], [summary.rated, '★つきの記録'],
+    ].map(([count, label]) => `<div class="discovery-summary-item"><strong>${count}<small>こ</small></strong><span>${label}</span></div>`).join('');
+    document.querySelectorAll('[data-discovery-mode]').forEach(button => {
+      button.setAttribute('aria-pressed', String(button.dataset.discoveryMode === discoveryMode));
+    });
+    let entries = discovery.byRating(cachedEntries);
+    let heading = '★5だった スイーツ';
+    let prefix = '';
+    let note = 'どんなところが すきだったかな？';
+    if (discoveryMode === 'five') entries = entries.filter(entry => discovery.rating(entry) === 5);
+    if (discoveryMode === 'rating') {
+      heading = '★の おおい順に 見てみよう';
+      note = '★をまだつけていない記録は、いちばん下にあるよ。';
+    }
+    if (discoveryMode === 'place') {
+      if (!summary.groups.some(group => group.key === discoveryPlace)) discoveryPlace = null;
+      prefix = `<div class="discovery-place-list">${summary.groups.map(group => `<button type="button" class="discovery-place"
+        data-discovery-place="${group.key}" aria-pressed="${discoveryPlace === group.key}"><strong>${group.label}</strong>
+        <span>${group.count}こ の記録</span><span>${group.average === null ? '★は まだないよ' : `★のへいきん ${group.average.toFixed(1)} / 5（${group.rated}こ）`}</span></button>`).join('')}</div>`;
+      heading = discoveryPlace === null ? 'ばしょを えらんで 見くらべよう' : `${discoveryPlace || 'ばしょ未記入'}の スイーツ`;
+      note = 'へいきんは、★をつけた記録だけで くらべているよ。ばしょを もう一度おすと、ぜんぶ見られるよ。';
+      if (discoveryPlace !== null) entries = entries.filter(entry => discovery.place(entry) === discoveryPlace);
+    }
+    const empty = summary.total === 0 ? 'まだ記録がないよ。日記に スイーツを ついかすると、ここで見られるよ。'
+      : '★5の記録は まだないよ。「★のおおい順」で、いまの すきを見てみよう。';
+    document.getElementById('discovery-results').innerHTML = `${prefix}<h2 class="discovery-results-title">${heading}</h2>
+      <p class="discovery-note">${note}</p>${entries.length ? `<div class="discovery-grid">${entries.map(discoveryCard).join('')}</div>` : `<p class="discovery-empty">${empty}</p>`}`;
+    document.getElementById('discovery-status').textContent = entriesLoadFailed
+      ? 'さいしんの記録を よめなかったよ。前によんだ記録を ひょうじしているよ。'
+      : `${entries.length}この記録を ひょうじしているよ。`;
+    document.getElementById('discovery-retry').hidden = !entriesLoadFailed;
+  }
+
+  function showDiscovery({ push = true, reload = true } = {}) {
+    homeView.hidden = true;
+    postView.hidden = true;
+    discoveryView.hidden = false;
+    if (push) history.pushState({ view: 'discover' }, '', '#discover');
+    renderDiscovery();
+    if (!entriesLoaded) document.getElementById('discovery-status').textContent = '記録を よんでいるよ…';
+    document.getElementById('discovery-title').focus({ preventScroll: true });
+    window.scrollTo(0, 0);
+    if (reload) void refresh();
+  }
+
+  document.getElementById('open-discovery').addEventListener('click', () => showDiscovery());
+  document.getElementById('discovery-back').addEventListener('click', () => {
+    if (history.state?.view === 'discover') history.back();
+    else {
+      history.replaceState({}, '', window.location.pathname);
+      showHomeView();
+      document.getElementById('open-discovery').focus();
+    }
+  });
+  document.getElementById('discovery-filters').addEventListener('click', event => {
+    const button = event.target.closest('[data-discovery-mode]');
+    if (!button) return;
+    discoveryMode = button.dataset.discoveryMode;
+    renderDiscovery();
+  });
+  document.getElementById('discovery-results').addEventListener('click', event => {
+    const button = event.target.closest('[data-discovery-place]');
+    if (!button) return;
+    const key = button.dataset.discoveryPlace;
+    discoveryPlace = discoveryPlace === key ? null : key;
+    renderDiscovery();
+    // Rendering replaces these buttons; restore keyboard focus to the same place.
+    [...document.querySelectorAll('[data-discovery-place]')].find(item => item.dataset.discoveryPlace === key)?.focus({ preventScroll: true });
+  });
+  document.getElementById('discovery-retry').addEventListener('click', async () => {
+    const button = document.getElementById('discovery-retry');
+    button.disabled = true;
+    document.getElementById('discovery-status').textContent = '記録を よんでいるよ…';
+    await refresh();
+    button.disabled = false;
   });
 
   // ===== 写真選択ボタン =====
@@ -581,5 +705,6 @@
 
   // ===== 起動 =====
 
+  if (window.location.hash === '#discover') showDiscovery({ push: false, reload: false });
   refresh();
 })();

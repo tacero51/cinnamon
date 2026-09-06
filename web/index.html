@@ -6,7 +6,7 @@
   <meta name="robots" content="noindex, nofollow">
   <title>ミッフィーのスイーツ日記</title>
   <meta name="description" content="食べたスイーツを記録するふわふわ日記">
-  <link rel="stylesheet" href="styles.css?v=20260517-9">
+  <link rel="stylesheet" href="styles.css?v=20260907-1">
 </head>
 <body>
   <!-- ふわふわ雲の背景装飾 -->
@@ -35,6 +35,14 @@
     </header>
 
     <main class="entries-section">
+      <button id="open-discovery" class="discovery-entry" type="button">
+        <span class="discovery-entry-icon" aria-hidden="true">✦</span>
+        <span class="discovery-entry-copy">
+          <strong>すき はっけん</strong>
+          <span>わたしの「すき」を みつけよう</span>
+        </span>
+        <span class="discovery-entry-arrow" aria-hidden="true">›</span>
+      </button>
       <div class="sort-bar" id="sort-bar">
         <button class="sort-btn active" data-sort="newest">🆕 あたらしい順</button>
         <button class="sort-btn" data-sort="oldest">📅 ふるい順</button>
@@ -68,6 +76,35 @@
     <footer class="site-footer">
       <p>made with ☁️ by ミッフィー</p>
     </footer>
+  </div>
+
+  <!-- すき はっけん画面 -->
+  <div id="discovery-view" hidden>
+    <header class="discovery-header">
+      <button id="discovery-back" class="back-btn" type="button" aria-label="日記にもどる">← もどる</button>
+      <div>
+        <p class="discovery-kicker">あなたのスイーツ日記から</p>
+        <h2 id="discovery-title" tabindex="-1">すき はっけん</h2>
+      </div>
+    </header>
+
+    <main class="discovery-main">
+      <section class="discovery-panel" aria-labelledby="discovery-title">
+        <p class="discovery-intro">おほしや ばしょを くらべて、<br>じぶんの「すき」を みつけよう。</p>
+        <div id="discovery-summary" class="discovery-summary" aria-live="polite"></div>
+
+        <div id="discovery-filters" class="discovery-filters" aria-label="見かたをえらぶ">
+          <button type="button" data-discovery-mode="five" aria-pressed="true">★5のスイーツ</button>
+          <button type="button" data-discovery-mode="rating" aria-pressed="false">★のおおい順</button>
+          <button type="button" data-discovery-mode="place" aria-pressed="false">ばしょで見る</button>
+        </div>
+
+        <p id="discovery-status" class="discovery-status" role="status" aria-live="polite"></p>
+        <button id="discovery-retry" class="discovery-retry" type="button" hidden>もういちど ためす</button>
+
+        <section id="discovery-results" class="discovery-results" aria-live="polite"></section>
+      </section>
+    </main>
   </div>
 
   <!-- まとめてとうろくの進捗オーバーレイ -->
@@ -164,6 +201,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=20260517-9"></script>
+  <script src="discovery.js?v=20260907-1"></script>
+  <script src="app.js?v=20260907-1"></script>
 </body>
 </html>
