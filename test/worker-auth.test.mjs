@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { File } from 'node:buffer';
-import { webcrypto } from 'node:crypto';
+import { webcrypto, createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import worker from '../src/worker.js';
@@ -50,6 +50,8 @@ function assetEnv() {
   };
 }
 
+function objectEtag(bytes) { return createHash('md5').update(bytes).digest('hex'); }
+
 function createR2(initialObjects = {}) {
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
@@ -81,7 +83,8 @@ function createR2(initialObjects = {}) {
         async text() {
           return decoder.decode(value.bytes);
         },
-        httpEtag: `etag-${key}`,
+        etag: objectEtag(value.bytes),
+        httpEtag: `"${objectEtag(value.bytes)}"`,
         httpMetadata: { contentType: value.contentType },
         writeHttpMetadata(headers) {
           headers.set('content-type', value.contentType);
@@ -92,10 +95,16 @@ function createR2(initialObjects = {}) {
       const attempt = (putAttempts.get(key) || 0) + 1;
       putAttempts.set(key, attempt);
       if (plannedPutFailures.get(key)?.has(attempt)) throw new Error(`planned put failure for ${key}`);
+      const bytes = await bytesFrom(value);
+      const current = objects.get(key);
+      const match = options.onlyIf?.etagMatches;
+      if (match && (!current || objectEtag(current.bytes) !== match)) return null;
+      if (options.onlyIf instanceof Headers && options.onlyIf.get('if-none-match') === '*' && current) return null;
       objects.set(key, {
-        bytes: await bytesFrom(value),
+        bytes,
         contentType: options.httpMetadata?.contentType || 'application/octet-stream',
       });
+      return { etag: objectEtag(bytes), httpEtag: `"${objectEtag(bytes)}"` };
     },
     async head(key) {
       const value = objects.get(key);
@@ -157,10 +166,10 @@ function imageBinding({ fail = false, invalidInfo = false } = {}) {
   };
 }
 
-async function multipartRequest(url, form, method = 'POST') {
+async function multipartRequest(url, form, method = 'POST', etag) {
   return new Request(url, {
     method,
-    headers: { ...(await sessionHeaders()), origin: new URL(url).origin },
+    headers: { ...(await sessionHeaders()), origin: new URL(url).origin, ...(etag ? { 'if-match': etag } : {}) },
     body: form,
   });
 }
@@ -247,6 +256,7 @@ test('renders a Password AutoFill-friendly login form and accepts only same-orig
   const formPage = await worker.fetch(new Request('https://example.test/login?next=%2Fcards%3Ftab%3Dnew'), assetEnv());
   const html = await formPage.text();
   assert.equal(formPage.status, 200);
+  assert.equal(formPage.headers.get('referrer-policy'), 'same-origin');
   assert.match(html, /autocomplete="username"/);
   assert.match(html, /autocomplete="current-password"/);
   assert.match(html, /autocapitalize="none"/);
@@ -260,6 +270,14 @@ test('renders a Password AutoFill-friendly login form and accepts only same-orig
     method: 'POST', headers: { origin: 'https://attacker.example' }, body: form,
   }), assetEnv());
   assert.equal(crossOrigin.status, 403);
+
+  for (const headers of [{}, { origin: 'null' }]) {
+    const rejected = await worker.fetch(new Request('https://example.test/login', {
+      method: 'POST', headers, body: form,
+    }), assetEnv());
+    assert.equal(rejected.status, 403);
+    assert.equal(rejected.headers.get('set-cookie'), null);
+  }
 
   const sameOriginForm = new FormData();
   sameOriginForm.set('username', USERNAME);
@@ -506,7 +524,7 @@ test('keeps a shared photo when one record replaces or removes its photo', async
   form.append('name', '一つ目');
   form.append('remove_photo', '1');
 
-  const response = await worker.fetch(await multipartRequest('https://example.test/api/entries/first', form, 'PUT'), {
+  const response = await worker.fetch(await multipartRequest('https://example.test/api/entries/first', form, 'PUT', (await r2.get('data/entries.json')).httpEtag), {
     ...assetEnv(),
     PHOTOS: r2,
     IMAGES: imageBinding(),
@@ -534,7 +552,7 @@ test('keeps a shared photo when deleting one of its records', async () => {
 
   const response = await worker.fetch(new Request('https://example.test/api/entries/first', {
     method: 'DELETE',
-    headers: { ...(await sessionHeaders()), origin: 'https://example.test' },
+    headers: { ...(await sessionHeaders()), origin: 'https://example.test', 'if-match': (await r2.get('data/entries.json')).httpEtag },
   }), { ...assetEnv(), PHOTOS: r2, IMAGES: imageBinding() });
   const entries = JSON.parse(r2.text('data/entries.json')).entries;
 
@@ -635,4 +653,131 @@ test('recovers a prepared manifest after the entries switch succeeds but its sta
   assert.equal(result.phase, 'ready_to_finalize');
   assert.equal(JSON.parse(r2.text('data/photo-sanitization-manifest.json')).status, 'entries_switched');
   assert.equal(r2.has('photos/legacy.jpg'), true);
+});
+
+function concurrencyEnv(entries = [{ id: 'first', name: 'before' }, { id: 'second', name: 'other' }]) {
+  return { ...assetEnv(), PHOTOS: createR2({
+    'data/entries.json': { body: JSON.stringify({ entries }), contentType: 'application/json' },
+  }), IMAGES: imageBinding() };
+}
+
+async function entriesRequest(env) {
+  return worker.fetch(new Request('https://example.test/api/entries', { headers: await sessionHeaders() }), env);
+}
+
+// Both callers must read the exact same snapshot before either is allowed to write.
+function synchronizeTwoReads(r2) {
+  const get = r2.get.bind(r2);
+  let arrived = 0;
+  let release;
+  const barrier = new Promise(resolve => { release = resolve; });
+  r2.get = async key => {
+    const result = await get(key);
+    if (key === 'data/entries.json' && arrived < 2) {
+      arrived += 1;
+      if (arrived === 2) release();
+      await barrier;
+    }
+    return result;
+  };
+}
+
+async function changeRequest(method, id, etag, { photo = false } = {}) {
+  const url = `https://example.test/api/entries${id ? `/${id}` : ''}`;
+  if (method === 'DELETE') return new Request(url, {
+    method, headers: { ...(await sessionHeaders()), origin: 'https://example.test', ...(etag ? { 'if-match': etag } : {}) },
+  });
+  const form = new FormData();
+  form.set('name', 'changed');
+  if (photo) form.set('photo', new File([new Uint8Array([0xff, 0xd8, 0xff])], 'photo.jpg', { type: 'image/jpeg' }));
+  return multipartRequest(url, form, method, etag);
+}
+
+test('GET exposes a snapshot ETag; missing and stale edit/delete versions cannot write', async () => {
+  const env = concurrencyEnv();
+  const page = await entriesRequest(env);
+  const etag = page.headers.get('x-entries-version');
+  assert.equal(etag, page.headers.get('etag'));
+  assert.match(etag, /^"[a-f0-9]+"$/);
+  for (const method of ['PUT', 'DELETE']) {
+    for (const [token, status] of [[undefined, 428], ['"stale"', 409], ['*', 409]]) {
+      const result = await worker.fetch(await changeRequest(method, 'first', token), env);
+      assert.equal(result.status, status);
+    }
+  }
+  const update = await worker.fetch(await changeRequest('PUT', 'first', etag), env);
+  assert.equal(update.status, 200);
+  assert.notEqual((await entriesRequest(env)).headers.get('etag'), etag);
+  assert.equal((await worker.fetch(await changeRequest('DELETE', 'first', etag), env)).status, 409);
+  assert.equal(JSON.parse(env.PHOTOS.text('data/entries.json')).entries[0].name, 'changed');
+});
+
+test('simultaneous photo posts keep the accepted record and remove only the rejected candidate', async () => {
+  const env = concurrencyEnv([]);
+  synchronizeTwoReads(env.PHOTOS);
+  const requests = await Promise.all([changeRequest('POST', null, null, { photo: true }), changeRequest('POST', null, null, { photo: true })]);
+  const results = await Promise.all(requests.map(request => worker.fetch(request, env)));
+  assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
+  const entries = JSON.parse(env.PHOTOS.text('data/entries.json')).entries;
+  assert.equal(entries.length, 1);
+  assert.equal(env.PHOTOS.has(entries[0].photo.slice(1)), true);
+  assert.equal(env.PHOTOS.keys().filter(k => k.startsWith('photos/')).length, 1);
+});
+
+for (const competing of ['POST', 'PUT', 'DELETE']) {
+  test(`a racing DELETE and ${competing} cannot overwrite the winning update`, async () => {
+    const env = concurrencyEnv();
+    const etag = (await entriesRequest(env)).headers.get('etag');
+    synchronizeTwoReads(env.PHOTOS);
+    const requests = await Promise.all([
+      changeRequest('DELETE', 'first', etag),
+      changeRequest(competing, competing === 'POST' ? null : 'second', etag),
+    ]);
+    const results = await Promise.all(requests.map(r => worker.fetch(r, env)));
+    assert.deepEqual(results.map(r => r.status).sort(), [200, 409]);
+    const entries = JSON.parse(env.PHOTOS.text('data/entries.json')).entries;
+    if (results[0].status === 200) {
+      assert.deepEqual(entries, [{ id: 'second', name: 'other' }]);
+    } else {
+      assert.ok(entries.some(e => e.id === 'first' && e.name === 'before'));
+      if (competing === 'POST') assert.equal(entries.length, 3);
+      if (competing === 'PUT') assert.equal(entries.find(e => e.id === 'second').name, 'changed');
+      if (competing === 'DELETE') assert.equal(entries.length, 1);
+    }
+  });
+}
+
+test('competing initial readers never overwrite a newly created source of truth', async () => {
+  const env = { ...assetEnv(), PHOTOS: createR2() };
+  const originalPut = env.PHOTOS.put.bind(env.PHOTOS);
+  let inject = true;
+  env.PHOTOS.put = async (key, value, options) => {
+    if (key === 'data/entries.json' && inject) {
+      inject = false;
+      await originalPut(key, JSON.stringify({ entries: [{ id: 'winner', name: 'keep me' }] }));
+    }
+    return originalPut(key, value, options);
+  };
+  const response = await entriesRequest(env);
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).entries, [{ id: 'winner', name: 'keep me' }]);
+});
+
+test('an uncertain entries write keeps both the new referenced photo and the old photo', async () => {
+  const oldKey = 'photos/secure/old.webp';
+  const env = concurrencyEnv([{ id: 'first', name: 'before', photo: `/${oldKey}` }]);
+  await env.PHOTOS.put(oldKey, 'old photo');
+  const etag = (await entriesRequest(env)).headers.get('etag');
+  const put = env.PHOTOS.put.bind(env.PHOTOS);
+  env.PHOTOS.put = async (key, value, options) => {
+    const result = await put(key, value, options);
+    if (key === 'data/entries.json') throw new Error('response lost after commit');
+    return result;
+  };
+  const response = await worker.fetch(await changeRequest('PUT', 'first', etag, { photo: true }), env);
+  assert.equal(response.status, 500);
+  const entry = JSON.parse(env.PHOTOS.text('data/entries.json')).entries[0];
+  assert.notEqual(entry.photo, `/${oldKey}`);
+  assert.equal(env.PHOTOS.has(entry.photo.slice(1)), true);
+  assert.equal(env.PHOTOS.has(oldKey), true);
 });

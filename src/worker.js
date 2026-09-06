@@ -104,7 +104,7 @@ export default {
         const id = decodeURIComponent(url.pathname.slice('/api/entries/'.length));
         if (!id) return errorResponse(400, 'entry id required');
         if (request.method === 'PUT') return await putEntry(request, env, id);
-        if (request.method === 'DELETE') return await deleteEntry(env, id);
+        if (request.method === 'DELETE') return await deleteEntry(request, env, id);
         return methodNotAllowed();
       }
 
@@ -372,8 +372,12 @@ function expiredSessionCookie() {
 // ===== Entries =====
 
 async function getEntries(env) {
-  const data = await readEntries(env);
-  return json(data);
+  const { data, etag } = await readEntries(env);
+  const response = json(data);
+  response.headers.set('etag', `"${etag}"`);
+  // CDN compression may weaken ETag. This version token must stay byte-exact.
+  response.headers.set('x-entries-version', `"${etag}"`);
+  return response;
 }
 
 async function postEntry(request, env) {
@@ -411,6 +415,7 @@ async function postEntry(request, env) {
 
   let storedPhotoKey = null;
   let entriesWritten = false;
+  let entriesWriteAttempted = false;
   try {
     const photo = form.get('photo');
     if (isUploadedPhoto(photo)) {
@@ -419,14 +424,17 @@ async function postEntry(request, env) {
       entry.photo = await sanitizeAndStorePhoto(env, photo.stream(), storedPhotoKey);
     }
 
-    const data = await readEntries(env);
+    const { data, etag } = await readEntries(env);
     data.entries.unshift(entry); // 最新を先頭に
     if (await writesAreBlocked(env)) throw new RequestIssue(503, 'photo maintenance is in progress; try again shortly');
-    await writeEntries(env, data);
+    entriesWriteAttempted = true;
+    await writeEntries(env, data, etag);
     entriesWritten = true;
     return json({ ok: true, entry });
   } catch (issue) {
-    if (!entriesWritten && storedPhotoKey) await deletePhotoSafely(env, storedPhotoKey);
+    if (!entriesWritten && storedPhotoKey && (!entriesWriteAttempted || (issue instanceof RequestIssue && issue.status === 409))) {
+      await deletePhotoSafely(env, storedPhotoKey);
+    }
     return responseForIssue(issue);
   }
 }
@@ -439,7 +447,8 @@ async function putEntry(request, env, id) {
     return errorResponse(400, 'Content-Type must be multipart/form-data');
   }
 
-  const data = await readEntries(env);
+  const { data, etag } = await readEntries(env);
+  assertEntriesVersion(request, etag);
   const idx = data.entries.findIndex((entry) => entry.id === id);
   if (idx < 0) return errorResponse(404, 'entry not found');
   const existing = data.entries[idx];
@@ -464,6 +473,7 @@ async function putEntry(request, env, id) {
   let storedPhotoKey = null;
   let photoUrl = existing.photo;
   let entriesWritten = false;
+  let entriesWriteAttempted = false;
 
   try {
     if (isUploadedPhoto(photo)) {
@@ -487,7 +497,8 @@ async function putEntry(request, env, id) {
     };
 
     if (await writesAreBlocked(env)) throw new RequestIssue(503, 'photo maintenance is in progress; try again shortly');
-    await writeEntries(env, data);
+    entriesWriteAttempted = true;
+    await writeEntries(env, data, etag);
     entriesWritten = true;
 
     // 新しいentries.jsonが保存されてから、他の記録が参照していない旧写真だけを削除する。
@@ -497,15 +508,18 @@ async function putEntry(request, env, id) {
 
     return json({ ok: true, entry: data.entries[idx] });
   } catch (issue) {
-    if (!entriesWritten && storedPhotoKey) await deletePhotoSafely(env, storedPhotoKey);
+    if (!entriesWritten && storedPhotoKey && (!entriesWriteAttempted || (issue instanceof RequestIssue && issue.status === 409))) {
+      await deletePhotoSafely(env, storedPhotoKey);
+    }
     return responseForIssue(issue);
   }
 }
 
-async function deleteEntry(env, id) {
+async function deleteEntry(request, env, id) {
   if (await writesAreBlocked(env)) return migrationInProgressResponse();
 
-  const data = await readEntries(env);
+  const { data, etag } = await readEntries(env);
+  assertEntriesVersion(request, etag);
   const idx = data.entries.findIndex((entry) => entry.id === id);
   if (idx < 0) return errorResponse(404, 'entry not found');
   const entry = data.entries[idx];
@@ -514,7 +528,7 @@ async function deleteEntry(env, id) {
   data.entries.splice(idx, 1);
   try {
     if (await writesAreBlocked(env)) return migrationInProgressResponse();
-    await writeEntries(env, data);
+    await writeEntries(env, data, etag);
   } catch (issue) {
     return responseForIssue(issue);
   }
@@ -552,20 +566,42 @@ function validDateOrExisting(value, existing) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : existing;
 }
 
+function assertEntriesVersion(request, etag) {
+  const expected = request.headers.get('if-match');
+  if (!expected) throw new RequestIssue(428, '記録を読みなおしてから、もう一度ひらいてね。');
+  if (expected !== `"${etag}"`) throw entriesConflict();
+}
+
+function entriesConflict() {
+  return new RequestIssue(409, 'ほかの画面で記録がかわったよ。入力はそのまま残っているよ。一覧を読みなおして確認してね。');
+}
+
 async function readEntries(env) {
   const obj = await env.PHOTOS.get(ENTRIES_KEY);
   if (!obj) {
-    // 初回: デフォルトを書き込んで返す
-    const initialEntries = cloneDefaultEntries();
-    await writeEntries(env, initialEntries);
-    return initialEntries;
+    // Two first readers must not overwrite each other's initialization/post.
+    const data = cloneDefaultEntries();
+    try {
+      const etag = await writeEntries(env, data, null);
+      return { data, etag };
+    } catch (issue) {
+      if (issue instanceof RequestIssue && issue.status === 409) {
+        const winner = await env.PHOTOS.get(ENTRIES_KEY);
+        if (winner) return { data: await parseEntries(winner), etag: winner.etag };
+      }
+      throw issue;
+    }
   }
+  return { data: await parseEntries(obj), etag: obj.etag };
+}
+
+async function parseEntries(obj) {
   try {
     const data = JSON.parse(await obj.text());
     if (!Array.isArray(data.entries)) throw new Error('entries array is missing');
     return data;
   } catch {
-    // 壊れた正本をサンプルデータで上書きしない。親がR2バックアップから復旧できるよう止める。
+    // Never replace a corrupt source of truth with sample data.
     throw new RequestIssue(500, 'entries data could not be read safely');
   }
 }
@@ -574,10 +610,18 @@ function cloneDefaultEntries() {
   return JSON.parse(JSON.stringify(DEFAULT_ENTRIES));
 }
 
-async function writeEntries(env, data) {
-  await env.PHOTOS.put(ENTRIES_KEY, JSON.stringify(data, null, 2), {
+async function writeEntries(env, data, expectedEtag) {
+  if (expectedEtag !== null && (typeof expectedEtag !== 'string' || !expectedEtag)) {
+    throw new RequestIssue(500, 'entries version is missing');
+  }
+  const stored = await env.PHOTOS.put(ENTRIES_KEY, JSON.stringify(data, null, 2), {
     httpMetadata: { contentType: 'application/json; charset=utf-8' },
+    onlyIf: expectedEtag === null
+      ? new Headers({ 'if-none-match': '*' })
+      : { etagMatches: expectedEtag },
   });
+  if (stored === null) throw entriesConflict();
+  return stored.etag;
 }
 
 // ===== Photo storage =====
@@ -718,7 +762,7 @@ async function sanitizeExistingPhotos(request, env) {
       return await resumePreparedPhotoMigration(env, existingManifest);
     }
 
-    const data = await readEntriesForMigration(env);
+    const { data } = await readEntriesForMigration(env);
     assertUniqueEntryIds(data.entries);
     const itemsByOldKey = new Map();
 
@@ -770,7 +814,7 @@ async function sanitizeExistingPhotos(request, env) {
 
 async function resumePreparedPhotoMigration(env, manifest) {
   await assertPreparedTargetsAreSafe(env, manifest);
-  const data = await readEntriesForMigration(env);
+  const { data, etag } = await readEntriesForMigration(env);
   const entryState = migrationEntryState(data, manifest);
 
   if (entryState === 'legacy') {
@@ -785,9 +829,9 @@ async function resumePreparedPhotoMigration(env, manifest) {
           : entry;
       }),
     };
-    await writeEntries(env, migratedData);
+    await writeEntries(env, migratedData, etag);
 
-    const reloadedData = await readEntriesForMigration(env);
+    const { data: reloadedData } = await readEntriesForMigration(env);
     if (migrationEntryState(reloadedData, manifest) !== 'entries_switched') {
       throw new RequestIssue(500, 'entries could not be switched safely');
     }
@@ -819,7 +863,7 @@ async function finalizeExistingPhotoSanitization(request, env) {
     }
 
     await assertPreparedTargetsAreSafe(env, manifest);
-    const data = await readEntriesForMigration(env);
+    const { data } = await readEntriesForMigration(env);
     if (migrationEntryState(data, manifest) !== 'entries_switched') {
       throw new RequestIssue(500, 'entries are not safely switched to sanitized photos');
     }
@@ -866,13 +910,7 @@ function migrationReadyToFinalize(manifest) {
 async function readEntriesForMigration(env) {
   const obj = await env.PHOTOS.get(ENTRIES_KEY);
   if (!obj) throw new RequestIssue(500, 'entries data is missing; photo migration stopped');
-  try {
-    const data = JSON.parse(await obj.text());
-    if (!Array.isArray(data.entries)) throw new Error('entries array is missing');
-    return data;
-  } catch {
-    throw new RequestIssue(500, 'entries data could not be read safely; photo migration stopped');
-  }
+  return { data: await parseEntries(obj), etag: obj.etag };
 }
 
 function assertMigrationManifest(manifest) {
@@ -1100,7 +1138,10 @@ function applyPrivateSecurityHeaders(headers) {
   headers.set('x-robots-tag', 'noindex, nofollow');
   headers.set('content-security-policy', CONTENT_SECURITY_POLICY);
   headers.set('permissions-policy', 'geolocation=(), camera=(), microphone=()');
-  headers.set('referrer-policy', 'no-referrer');
+  // no-referrer makes browser form POSTs send Origin: null, rejecting our own
+  // login/logout forms. same-origin preserves their Origin while withholding
+  // the Referer from external sites. Keep the strict Origin check unchanged.
+  headers.set('referrer-policy', 'same-origin');
   headers.set('strict-transport-security', 'max-age=31536000');
   headers.set('x-frame-options', 'DENY');
 }

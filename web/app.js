@@ -11,6 +11,9 @@
 
   let cachedEntries = [];
   let currentSort = localStorage.getItem('cinnamon.sort') || 'newest';
+  // 一覧を読んだ時点の版。編集を開く時だけ editingETag に写す。
+  // 編集中の再読み込みでその版を更新すると、他端末の変更を上書きしてしまう。
+  let entriesETag = null;
 
   // ===== エントリ表示 =====
 
@@ -19,10 +22,13 @@
       const res = await fetch(ENTRIES_URL, { cache: 'no-cache' });
       if (!res.ok) throw new Error('fetch failed: ' + res.status);
       const data = await res.json();
-      return Array.isArray(data.entries) ? data.entries : [];
+      return {
+        entries: Array.isArray(data.entries) ? data.entries : [],
+        etag: res.headers.get('x-entries-version'),
+      };
     } catch (e) {
       console.error('エントリの読み込みに失敗', e);
-      return [];
+      return null;
     }
   }
 
@@ -153,8 +159,11 @@
   }
 
   async function refresh() {
-    const entries = await loadEntries();
-    render(entries);
+    const snapshot = await loadEntries();
+    if (!snapshot) return false;
+    entriesETag = snapshot.etag;
+    render(snapshot.entries);
+    return true;
   }
 
   // ===== 画面遷移制御 =====
@@ -167,13 +176,16 @@
   const submitBtn = form.querySelector('.btn-submit');
 
   let editingId = null;
+  let editingETag = null;
   let existingPhotoUrl = null; // 編集モードで既存の写真URL
+  let formRequestInFlight = false;
 
   const deleteZone = document.getElementById('delete-zone');
   const deleteBtn = document.getElementById('delete-btn');
 
   function showPostView(entry = null) {
     editingId = entry?.id || null;
+    editingETag = entry ? entriesETag : null;
     existingPhotoUrl = null;
 
     // 共通リセット
@@ -221,8 +233,9 @@
     history.pushState({ view: 'post' }, '', '#post');
   }
 
-  function showHomeView() {
+  function showHomeView({ reload = true } = {}) {
     editingId = null;
+    editingETag = null;
     existingPhotoUrl = null;
     form.reset();
     setRating(0);
@@ -236,6 +249,8 @@
 
     postView.hidden = true;
     homeView.hidden = false;
+    // 編集画面から戻った時は、競合後にも必ず最新の一覧を取り直す。
+    if (reload) void refresh();
   }
 
   function goBack() {
@@ -262,6 +277,25 @@
   function removeRemovePhotoFlag() {
     const flag = form.querySelector('input[name="remove_photo"]');
     if (flag) flag.remove();
+  }
+
+  function setFormActionsBusy(isBusy) {
+    submitBtn.disabled = isBusy;
+    deleteBtn.disabled = isBusy;
+  }
+
+  function showConcurrentChangeMessage() {
+    messageEl.textContent = 'ほかの端末で きろくが かわったみたい。いまの入力は のこしてあるよ。いちらんに もどって さいしんにしてから、もういちど ひらいてね。';
+    messageEl.className = 'form-message error';
+    messageEl.hidden = false;
+  }
+
+  function isConcurrentChange(res) {
+    return res.status === 409 || res.status === 428;
+  }
+
+  function editRequestHeaders() {
+    return editingETag ? { 'If-Match': editingETag } : {};
   }
 
   // 投稿ボタン
@@ -382,28 +416,35 @@
 
   // 編集画面からの削除
   deleteBtn.addEventListener('click', async () => {
-    if (!editingId) return;
+    if (!editingId || formRequestInFlight) return;
     const entry = cachedEntries.find((x) => x.id === editingId);
     const name = entry && entry.name ? `「${entry.name}」` : 'このスイーツのきろく';
     if (!confirm(`${name}を ほんとうに けしていい？`)) return;
 
-    deleteBtn.disabled = true;
-    submitBtn.disabled = true;
+    formRequestInFlight = true;
+    setFormActionsBusy(true);
     try {
-      const res = await fetch(`/api/entries/${encodeURIComponent(editingId)}`, { method: 'DELETE' });
+      const res = await fetch(`/api/entries/${encodeURIComponent(editingId)}`, {
+        method: 'DELETE',
+        headers: editRequestHeaders(),
+      });
       const json = await res.json().catch(() => ({}));
+      if (isConcurrentChange(res)) {
+        showConcurrentChangeMessage();
+        return;
+      }
       if (!res.ok || !json.ok) throw new Error(json.error || `エラー: ${res.status}`);
       await refresh();
       // 削除後はホームへ確実に戻る
       history.replaceState({}, '', window.location.pathname);
-      showHomeView();
+      showHomeView({ reload: false });
     } catch (err) {
       messageEl.textContent = 'けせなかった: ' + err.message;
       messageEl.className = 'form-message error';
       messageEl.hidden = false;
     } finally {
-      deleteBtn.disabled = false;
-      submitBtn.disabled = false;
+      formRequestInFlight = false;
+      setFormActionsBusy(false);
     }
   });
 
@@ -411,8 +452,10 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
+    if (formRequestInFlight) return;
 
-    submitBtn.disabled = true;
+    formRequestInFlight = true;
+    setFormActionsBusy(true);
     messageEl.hidden = true;
 
     const fd = new FormData(form);
@@ -421,8 +464,16 @@
     const method = isEdit ? 'PUT' : 'POST';
 
     try {
-      const res = await fetch(url, { method, body: fd });
+      const res = await fetch(url, {
+        method,
+        body: fd,
+        headers: isEdit ? editRequestHeaders() : {},
+      });
       const json = await res.json().catch(() => ({}));
+      if (isConcurrentChange(res)) {
+        showConcurrentChangeMessage();
+        return;
+      }
       if (!res.ok || !json.ok) {
         throw new Error(json.error || `エラー: ${res.status}`);
       }
@@ -432,17 +483,17 @@
       messageEl.hidden = false;
 
       await refresh();
-      setTimeout(() => {
-        // 投稿成功後はホームへ確実に戻る（URLの#postも消す）
-        history.replaceState({}, '', window.location.pathname);
-        showHomeView();
-      }, 600);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      // 投稿成功後はホームへ確実に戻る（URLの#postも消す）
+      history.replaceState({}, '', window.location.pathname);
+      showHomeView({ reload: false });
     } catch (e) {
       messageEl.textContent = '失敗しちゃった: ' + e.message;
       messageEl.className = 'form-message error';
       messageEl.hidden = false;
     } finally {
-      submitBtn.disabled = false;
+      formRequestInFlight = false;
+      setFormActionsBusy(false);
     }
   });
 
